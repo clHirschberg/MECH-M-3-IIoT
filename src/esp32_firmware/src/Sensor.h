@@ -19,6 +19,7 @@ extern Preferences preferences;
 class Sensor {
 protected:
     String sensorId;
+    String clientId;
     String sensorName;
     unsigned long sendInterval;
     unsigned long lastSendTime = 0;
@@ -39,7 +40,8 @@ public:
         // TODO: Die Client-ID muss am Broker eindeutig sein – z.B. aus der MAC-Adresse
         // oder dem Gruppennamen ableiten. Verbinden sich zwei Geräte mit derselben ID,
         // trennt der Broker jeweils das zuvor verbundene Gerät.
-        sensorId = String(MQTT_CLIENT_ID_PREFIX) + "TODO-eindeutige-ID";
+        sensorId = String(MQTT_CLIENT_ID_PREFIX) + "brose-cal-hirschberg-kloepfer";
+        clientId = String(MQTT_CLIENT_ID_PREFIX) + "brose-cal-hirschberg-kloepfer";
 
         preferences.begin("sensor_config", false);
         sensorName = preferences.getString("sensorName", "DefaultSensor");
