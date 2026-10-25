@@ -74,20 +74,41 @@ void Sensor::publishMetadata() {
 
 // ----- REST API (siehe docs/iot-specs/openapi.yaml) -----
 
+static void sendCorsHeaders() {
+    // Hier weitere Frontend-Adressen ergänzen, falls das Dashboard anders gehostet wird.
+    const String origin = server.header("Origin");
+    server.sendHeader("Vary", "Origin");
+    if (origin == "http://localhost:4200" || origin == "http://127.0.0.1:4200") {
+        server.sendHeader("Access-Control-Allow-Origin", origin);
+        server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
+    }
+}
+
+static void handleCorsPreflight() {
+    sendCorsHeaders();
+    server.send(204, "text/plain", "");
+}
+
 static void sendJsonError(int code, const char* message) {
     JsonDocument doc;
     doc["error"] = message;
     String output;
     serializeJson(doc, output);
+    sendCorsHeaders();
     server.send(code, "application/json", output);
 }
 
 void Sensor::setupRestApi() {
+    const char* headers[] = {"Origin"};
+    server.collectHeaders(headers, 1);
     // WebServer erwartet Callbacks ohne Objektbezug -> Lambdas, die 'this' einfangen.
     // Reihenfolge zählt: spezifische Methoden zuerst, HTTP_ANY fängt den Rest ab (405).
+    server.on("/config", HTTP_OPTIONS, handleCorsPreflight);
     server.on("/config", HTTP_GET, [this]() { handleGetSettings(); });
     server.on("/config", HTTP_POST, [this]() { handlePostSettings(); });
     server.on("/config", HTTP_ANY, []() { sendJsonError(405, "method not allowed"); });
+    server.on("/status", HTTP_OPTIONS, handleCorsPreflight);
     server.on("/status", HTTP_GET, [this]() { handleGetStatus(); });
     server.on("/status", HTTP_ANY, []() { sendJsonError(405, "method not allowed"); });
     server.onNotFound([]() { sendJsonError(404, "not found"); });
@@ -104,6 +125,7 @@ void Sensor::handleGetSettings() {
     doc["reading_interval_seconds"] = sendInterval / 1000;
     String output;
     serializeJson(doc, output);
+    sendCorsHeaders();
     server.send(200, "application/json", output);
 }
 
@@ -169,6 +191,7 @@ void Sensor::handleGetStatus() {
     }
     String output;
     serializeJson(doc, output);
+    sendCorsHeaders();
     server.send(200, "application/json", output);
 }
 void Sensor::mqttCallback(char* topic, byte* payload, unsigned int length) { /* ... */ }
