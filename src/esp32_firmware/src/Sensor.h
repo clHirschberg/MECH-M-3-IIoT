@@ -27,6 +27,10 @@ protected:
     String mqttTopicMeta;
     bool useSecureConnection; // Das neue Flag für MQTTS
 
+    // Für GET /status: zuletzt erfolgreich gesendeter Wert und Zeitpunkt (millis)
+    float lastValue = NAN;
+    unsigned long lastPublishMs = 0;
+
     struct SensorMetadata {
         String type, unit, location, description;
         float min_value, max_value;
@@ -134,6 +138,7 @@ public:
 private:
     void handleGetSettings();
     void handlePostSettings();
+    void handleGetStatus();
     static void mqttCallback(char* topic, byte* payload, unsigned int length);
 };
 
