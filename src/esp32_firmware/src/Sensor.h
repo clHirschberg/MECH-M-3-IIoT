@@ -19,6 +19,7 @@ extern Preferences preferences;
 class Sensor {
 protected:
     String sensorId;
+    String groupId;
     String sensorName;
     unsigned long sendInterval;
     unsigned long lastSendTime = 0;
@@ -39,7 +40,8 @@ public:
         // TODO: Die Client-ID muss am Broker eindeutig sein – z.B. aus der MAC-Adresse
         // oder dem Gruppennamen ableiten. Verbinden sich zwei Geräte mit derselben ID,
         // trennt der Broker jeweils das zuvor verbundene Gerät.
-        sensorId = String(MQTT_CLIENT_ID_PREFIX) + "TODO-eindeutige-ID";
+        groupId = "Kloepfer-Brose-Hirschberg-Kal";
+        sensorId = String(MQTT_CLIENT_ID_PREFIX) + groupId;
 
         preferences.begin("sensor_config", false);
         sensorName = preferences.getString("sensorName", "DefaultSensor");
@@ -53,8 +55,8 @@ public:
         metadata.location = loc;
         metadata.description = desc;
 
-        mqttTopicData = "iiot/sensors/" + sensorId + "/data";
-        mqttTopicMeta = "iiot/sensors/" + sensorId + "/meta";
+        mqttTopicData = "iiot/group/" + groupId + "/sensor/temperature/state";
+        mqttTopicMeta = "iiot/group/" + groupId + "/status";
     }
 
     virtual ~Sensor() {}
@@ -112,6 +114,8 @@ public:
 
         if (millis() - lastSendTime > sendInterval) {
             float value = readSensorValue();
+            float sim_value = 10.0f + (random(0, 10001) / 10000.0f) * 5.0f; // debug (no sensor values available yet)            publishSensorData(static_value);
+            publishSensorData(sim_value);
             if (!isnan(value)) {
                 publishSensorData(value);
             }
