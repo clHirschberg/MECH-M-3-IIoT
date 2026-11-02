@@ -118,8 +118,6 @@ public:
 
         if (millis() - lastSendTime > sendInterval) {
             float value = readSensorValue();
-            float sim_value = 10.0f + (random(0, 10001) / 10000.0f) * 5.0f; // debug (no sensor values available yet)            publishSensorData(static_value);
-            publishSensorData(sim_value);
             if (!isnan(value)) {
                 publishSensorData(value);
             }
