@@ -39,36 +39,63 @@ void loop() {
 // Da sie im Header nur deklariert wurden, müssen sie hier implementiert werden.
 // Alternativ könnte man eine Sensor.cpp-Datei erstellen.
 
-void Sensor::publishSensorData(float value) {
-    JsonDocument doc;
-    doc["sensorId"] = sensorId;
-    doc["sensorName"] = sensorName;
-    doc["timestamp"] = millis();
-    buildSensorDataJson(doc, value); // Ruft die Methode der abgeleiteten Klasse auf
-    String output;
-    serializeJson(doc, output);
-    if (mqttClient.publish(mqttTopicData.c_str(), output.c_str())) {
-        lastValue = value;
-        lastPublishMs = millis();
-        Serial.println("Published data: " + output);
-    } else {
-        Serial.println("Failed to publish data.");
+// ----- Zeit (NTP, UTC) -----
+
+void Sensor::syncTime() {
+    // Offset 0 / keine Sommerzeit: Die Systemzeit läuft in UTC
+    configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+    Serial.print("Waiting for NTP time sync");
+    // Vor dem Sync steht die Uhr auf 1970 -> blockieren, bis eine plausible Zeit da ist
+    while (time(nullptr) < 1700000000) {
+        delay(500);
+        Serial.print(".");
     }
+    Serial.println("\nTime synced: " + isoTimestampUtc());
 }
 
-void Sensor::publishMetadata() {
+String Sensor::isoTimestampUtc() {
+    time_t now = time(nullptr);
+    struct tm utc;
+    gmtime_r(&now, &utc);
+    char buf[sizeof "2026-11-25T18:30:00Z"];
+    strftime(buf, sizeof buf, "%Y-%m-%dT%H:%M:%SZ", &utc);
+    return String(buf);
+}
+
+// ----- MQTT (siehe docs/iot-specs/conventions.md) -----
+
+bool Sensor::publishReading(const char* metric, float value, const char* unit) {
+    if (isnan(value)) {
+        Serial.println(String("Invalid ") + metric + " reading, not published.");
+        return false;
+    }
     JsonDocument doc;
-    doc["sensorId"] = sensorId;
-    doc["sensorName"] = sensorName;
-    doc["type"] = metadata.type;
-    doc["unit"] = metadata.unit;
-    // ... (Rest der Metadaten)
+    doc["timestamp"] = isoTimestampUtc();
+    doc["sensor_id"] = deviceId;
+    doc["value"] = value;
+    doc["unit"] = unit;
     String output;
     serializeJson(doc, output);
-    if (mqttClient.publish(mqttTopicMeta.c_str(), output.c_str(), true)) {
-        Serial.println("Published metadata (retained): " + output);
+    String topic = mqttTopicBase + "/sensor/" + metric + "/state";
+    if (mqttClient.publish(topic.c_str(), output.c_str())) {
+        Serial.println("Published " + topic + ": " + output);
+        return true;
+    }
+    Serial.println("Failed to publish " + topic);
+    return false;
+}
+
+void Sensor::publishStatus(const char* status) {
+    JsonDocument doc;
+    doc["status"] = status;
+    doc["timestamp"] = isoTimestampUtc();
+    doc["sensor_id"] = deviceId;
+    String output;
+    serializeJson(doc, output);
+    if (mqttClient.publish(mqttTopicStatus.c_str(), output.c_str(), true)) {
+        Serial.println("Published status (retained): " + output);
     } else {
-        Serial.println("Failed to publish metadata.");
+        Serial.println("Failed to publish status.");
     }
 }
 
@@ -121,7 +148,7 @@ void Sensor::handleRestApi() { server.handleClient(); }
 
 void Sensor::handleGetSettings() {
     JsonDocument doc;
-    doc["device_id"] = sensorName;
+    doc["device_id"] = deviceId;
     doc["reading_interval_seconds"] = sendInterval / 1000;
     String output;
     serializeJson(doc, output);
@@ -144,8 +171,8 @@ void Sensor::handlePostSettings() {
 
     // Erst alles validieren, dann übernehmen -> keine halb angewendete Konfiguration
     JsonVariant interval = doc["reading_interval_seconds"];
-    JsonVariant deviceId = doc["device_id"];
-    if (interval.isNull() && deviceId.isNull()) {
+    JsonVariant newDeviceId = doc["device_id"];
+    if (interval.isNull() && newDeviceId.isNull()) {
         sendJsonError(400, "no known config field");
         return;
     }
@@ -154,7 +181,7 @@ void Sensor::handlePostSettings() {
         sendJsonError(400, "reading_interval_seconds must be an integer between 1 and 86400");
         return;
     }
-    if (!deviceId.isNull() && (!deviceId.is<const char*>() || strlen(deviceId.as<const char*>()) == 0)) {
+    if (!newDeviceId.isNull() && (!newDeviceId.is<const char*>() || strlen(newDeviceId.as<const char*>()) == 0)) {
         sendJsonError(400, "device_id must be a non-empty string");
         return;
     }
@@ -164,11 +191,17 @@ void Sensor::handlePostSettings() {
         sendInterval = interval.as<unsigned long>() * 1000;
         preferences.putULong("sendInterval", sendInterval);
     }
-    if (!deviceId.isNull()) {
-        sensorName = deviceId.as<String>();
-        preferences.putString("sensorName", sensorName);
+    if (!newDeviceId.isNull()) {
+        deviceId = newDeviceId.as<String>();
+        preferences.putString("sensorName", deviceId);
     }
     preferences.end();
+
+    // Neue sensor_id auch im Last Will: sauber trennen, loop() verbindet neu
+    // und sendet "ok" mit der neuen ID.
+    if (!newDeviceId.isNull()) {
+        mqttClient.disconnect();
+    }
 
     handleGetSettings(); // 200 mit der jetzt gültigen Konfiguration
 }
@@ -176,7 +209,7 @@ void Sensor::handlePostSettings() {
 // Vorläufiges Schema - die Felder von /status werden noch in der Gesamtgruppe festgelegt
 void Sensor::handleGetStatus() {
     JsonDocument doc;
-    doc["device_id"] = sensorName;
+    doc["device_id"] = deviceId;
     doc["uptime_seconds"] = millis() / 1000;
     doc["wifi_connected"] = WiFi.status() == WL_CONNECTED;
     doc["wifi_rssi"] = WiFi.RSSI();

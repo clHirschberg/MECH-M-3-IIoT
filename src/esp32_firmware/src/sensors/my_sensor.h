@@ -22,24 +22,18 @@ public:
         dht.begin();
     }
 
-    // Implementierung der reinen virtuellen Funktionen der Basisklasse
-    float readSensorValue() override {
-        float temp = dht.readTemperature();
-        if (isnan(temp)) {
-            Serial.println("Failed to read from DHT sensor!");
-            return NAN; // Gibt "Not a Number" zurück, um Fehler zu signalisieren
-        }
-        return temp;
-    }
-
-    void buildSensorDataJson(JsonDocument& doc, float value) override {
-        // Fügt die spezifischen Daten zum JSON-Payload hinzu
-        doc["temperature"] = value;
-        // Optional auch die Luftfeuchtigkeit hinzufügen
+    // Implementierung der reinen virtuellen Funktion der Basisklasse:
+    // Jede Messgröße geht als eigene Nachricht auf ihr eigenes Topic.
+    void readAndPublish() override {
+        // Die DHT-Library liest den Sensor max. alle 2 s, der zweite Aufruf nutzt denselben Messzyklus
+        float temperature = dht.readTemperature();
         float humidity = dht.readHumidity();
-        if (!isnan(humidity)) {
-            doc["humidity"] = humidity;
+
+        // GET /status meldet die zuletzt gesendete Temperatur als last_value
+        if (publishReading("temperature", temperature, "°C")) {
+            recordLastValue(temperature);
         }
+        publishReading("humidity", humidity, "%");
     }
 };
 

@@ -7,6 +7,7 @@
 #include <ArduinoJson.h>
 #include <WebServer.h>
 #include <Preferences.h>
+#include <time.h>
 #include "config_secure.h" // Inkludiert Zertifikat und Port-Definitionen
 
 // Globale Objekte, da sie von der Basisklasse genutzt werden
@@ -18,13 +19,13 @@ extern Preferences preferences;
 
 class Sensor {
 protected:
-    String sensorId;
-    String groupId;
-    String sensorName;
+    String mqttClientId;  // Client-ID am Broker (muss dort eindeutig sein)
+    String groupId;       // Topic-Teil iiot/group/<groupId>/... (Kleinbuchstaben, conventions.md)
+    String deviceId;      // Wird als "sensor_id" gesendet, per REST /config als "device_id" änderbar
     unsigned long sendInterval;
     unsigned long lastSendTime = 0;
-    String mqttTopicData;
-    String mqttTopicMeta;
+    String mqttTopicBase;   // iiot/group/<groupId>
+    String mqttTopicStatus; // iiot/group/<groupId>/status
     bool useSecureConnection; // Das neue Flag für MQTTS
 
     // Für GET /status: zuletzt erfolgreich gesendeter Wert und Zeitpunkt (millis)
@@ -36,19 +37,27 @@ protected:
         float min_value, max_value;
     } metadata;
 
+    // Sendet einen Messwert auf iiot/group/<groupId>/sensor/<metric>/state.
+    // NaN wird nicht gesendet. Rückgabe: true, wenn publiziert wurde.
+    bool publishReading(const char* metric, float value, const char* unit);
+
+    // Merkt sich den Wert für GET /status (last_value, last_publish_seconds_ago)
+    void recordLastValue(float value) {
+        lastValue = value;
+        lastPublishMs = millis();
+    }
+
 public:
     // Der Konstruktor nimmt nun das Flag für die Verbindungsart entgegen
     Sensor(String type, String unit, float minVal, float maxVal, String loc, String desc, bool isSecure) {
         useSecureConnection = isSecure;
 
-        // TODO: Die Client-ID muss am Broker eindeutig sein – z.B. aus der MAC-Adresse
-        // oder dem Gruppennamen ableiten. Verbinden sich zwei Geräte mit derselben ID,
-        // trennt der Broker jeweils das zuvor verbundene Gerät.
-        groupId = "Kloepfer-Brose-Hirschberg-Kal";
-        sensorId = String(MQTT_CLIENT_ID_PREFIX) + groupId;
+        groupId = "kloepfer-brose-hirschberg-kal";
+        mqttClientId = String(MQTT_CLIENT_ID_PREFIX) + groupId;
 
         preferences.begin("sensor_config", false);
-        sensorName = preferences.getString("sensorName", "DefaultSensor");
+        // Key bleibt "sensorName", damit bereits gespeicherte Werte erhalten bleiben
+        deviceId = preferences.getString("sensorName", "iot-gruppe-5");
         sendInterval = preferences.getULong("sendInterval", 5000);
         preferences.end();
 
@@ -59,15 +68,15 @@ public:
         metadata.location = loc;
         metadata.description = desc;
 
-        mqttTopicData = "iiot/group/" + groupId + "/sensor/temperature/state";
-        mqttTopicMeta = "iiot/group/" + groupId + "/status";
+        mqttTopicBase = "iiot/group/" + groupId;
+        mqttTopicStatus = mqttTopicBase + "/status";
     }
 
     virtual ~Sensor() {}
 
-    // Virtuelle Funktionen müssen von der abgeleiteten Klasse implementiert werden
-    virtual float readSensorValue() = 0;
-    virtual void buildSensorDataJson(JsonDocument& doc, float value) = 0;
+    // Muss von der abgeleiteten Klasse implementiert werden:
+    // Sensor auslesen und jeden Messwert per publishReading() senden.
+    virtual void readAndPublish() = 0;
 
     void setupWifiAndMqtt() {
         Serial.print("Connecting to WiFi: ");
@@ -78,6 +87,8 @@ public:
             Serial.print(".");
         }
         Serial.println("\nWiFi connected. IP: " + WiFi.localIP().toString());
+
+        syncTime();
 
         // Logik für sichere vs. unsichere Verbindung
         if (useSecureConnection) {
@@ -90,17 +101,25 @@ public:
             mqttClient.setClient(espClient);
             mqttClient.setServer(MQTT_BROKER_HOST, MQTT_INSECURE_PORT); // Unsicherer Port
         }
-        
+
         mqttClient.setCallback(mqttCallback);
     }
 
     void reconnectMqtt() {
         while (!mqttClient.connected()) {
             Serial.print("Attempting MQTT connection...");
+            // Last Will: Der Broker sendet "offline" (retained), wenn die Verbindung abreißt.
+            // Ohne timestamp, da der Zeitpunkt des Abbruchs beim Verbinden unbekannt ist.
+            JsonDocument will;
+            will["status"] = "offline";
+            will["sensor_id"] = deviceId;
+            String willPayload;
+            serializeJson(will, willPayload);
             // MQTT_USER und MQTT_PASSWORD kommen aus platformio.ini (.env)
-            if (mqttClient.connect(sensorId.c_str(), MQTT_USER, MQTT_PASSWORD)) {
+            if (mqttClient.connect(mqttClientId.c_str(), MQTT_USER, MQTT_PASSWORD,
+                                   mqttTopicStatus.c_str(), 1, true, willPayload.c_str())) {
                 Serial.println("connected!");
-                publishMetadata();
+                publishStatus("ok");
             } else {
                 Serial.print("failed, rc=");
                 Serial.print(mqttClient.state());
@@ -117,23 +136,18 @@ public:
         mqttClient.loop();
 
         if (millis() - lastSendTime > sendInterval) {
-            float value = readSensorValue();
-            if (!isnan(value)) {
-                publishSensorData(value);
-            }
+            readAndPublish();
             lastSendTime = millis();
         }
     }
 
-    // Die restlichen Funktionen (publishSensorData, publishMetadata, REST-API, etc.)
-    // bleiben im Wesentlichen gleich wie im ursprünglichen Code.
-    // (Aus Platzgründen hier nicht erneut aufgeführt)
-    void publishSensorData(float value);
-    void publishMetadata();
+    void publishStatus(const char* status);
     void setupRestApi();
     void handleRestApi();
 
 private:
+    void syncTime();
+    static String isoTimestampUtc();
     void handleGetSettings();
     void handlePostSettings();
     void handleGetStatus();
