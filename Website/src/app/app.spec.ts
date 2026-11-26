@@ -5,15 +5,15 @@ import { App } from './app';
 import { routes } from './app.routes';
 
 describe('App navigation', () => {
-  it('offers separate device and measurement pages', async () => {
+  it('offers device, measurement and documentation pages', async () => {
     await TestBed.configureTestingModule({
       imports: [App], providers: [provideRouter(routes), provideHttpClient()],
     }).compileComponents();
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const links = [...(fixture.nativeElement as HTMLElement).querySelectorAll('nav a')];
-    expect(links.map(a => a.textContent?.trim())).toEqual(['Geräte-API', 'Messdaten']);
-    expect(links.map(a => a.getAttribute('href'))).toEqual(['/', '/messdaten']);
+    expect(links.map(a => a.textContent?.trim())).toEqual(['Geräte-API', 'Messdaten', 'Dokumentation']);
+    expect(links.map(a => a.getAttribute('href'))).toEqual(['/', '/messdaten', '/doku']);
     expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('In Grafana öffnen');
   });
 });

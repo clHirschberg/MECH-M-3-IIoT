@@ -28,9 +28,15 @@ protected:
     String mqttTopicStatus; // iiot/group/<groupId>/status
     bool useSecureConnection; // Das neue Flag für MQTTS
 
-    // Für GET /status: zuletzt erfolgreich gesendeter Wert und Zeitpunkt (millis)
+    // Für GET /status (openapi.yaml 1.2.0): letzte gesendete Temperatur und Feuchte
     float lastValue = NAN;
-    unsigned long lastPublishMs = 0;
+    String lastTimestamp;
+    float lastHumidity = NAN;
+
+    // Aktueller Gerätestatus ("ok" oder "error"), wird nur bei Änderung neu gesendet
+    String currentStatus = "ok";
+    unsigned long lastMqttAttemptMs = 0;
+    static const unsigned long MQTT_RETRY_MS = 5000;
 
     struct SensorMetadata {
         String type, unit, location, description;
@@ -41,10 +47,20 @@ protected:
     // NaN wird nicht gesendet. Rückgabe: true, wenn publiziert wurde.
     bool publishReading(const char* metric, float value, const char* unit);
 
-    // Merkt sich den Wert für GET /status (last_value, last_publish_seconds_ago)
+    // Merkt sich die zuletzt gesendete Temperatur für GET /status (last_telemetry)
     void recordLastValue(float value) {
         lastValue = value;
-        lastPublishMs = millis();
+        lastTimestamp = isoTimestampUtc();
+    }
+
+    // Merkt sich die zuletzt gemessene Feuchte für GET /status (last_humidity_percent)
+    void recordLastHumidity(float value) { lastHumidity = value; }
+
+    // Setzt den Status ("ok"/"error") und sendet ihn nur bei einem Wechsel (retained)
+    void setStatus(const char* status) {
+        if (currentStatus == status) return;
+        currentStatus = status;
+        if (mqttClient.connected()) publishStatus(status);
     }
 
 public:
@@ -105,8 +121,12 @@ public:
         mqttClient.setCallback(mqttCallback);
     }
 
+    // Nicht blockierend: höchstens alle MQTT_RETRY_MS ein Verbindungsversuch,
+    // damit die REST-API auch ohne Broker erreichbar bleibt.
     void reconnectMqtt() {
-        while (!mqttClient.connected()) {
+        if (lastMqttAttemptMs != 0 && millis() - lastMqttAttemptMs < MQTT_RETRY_MS) return;
+        lastMqttAttemptMs = millis();
+        {
             Serial.print("Attempting MQTT connection...");
             // Last Will: Der Broker sendet "offline" (retained), wenn die Verbindung abreißt.
             // Ohne timestamp, da der Zeitpunkt des Abbruchs beim Verbinden unbekannt ist.
@@ -119,12 +139,12 @@ public:
             if (mqttClient.connect(mqttClientId.c_str(), MQTT_USER, MQTT_PASSWORD,
                                    mqttTopicStatus.c_str(), 1, true, willPayload.c_str())) {
                 Serial.println("connected!");
-                publishStatus("ok");
+                // Überschreibt den retained Last Will mit dem aktuellen Status
+                publishStatus(currentStatus.c_str());
             } else {
                 Serial.print("failed, rc=");
                 Serial.print(mqttClient.state());
                 Serial.println(" try again in 5 seconds");
-                delay(5000);
             }
         }
     }
@@ -135,7 +155,7 @@ public:
         }
         mqttClient.loop();
 
-        if (millis() - lastSendTime > sendInterval) {
+        if (mqttClient.connected() && millis() - lastSendTime >= sendInterval) {
             readAndPublish();
             lastSendTime = millis();
         }

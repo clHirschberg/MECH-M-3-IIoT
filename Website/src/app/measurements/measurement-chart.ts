@@ -1,15 +1,21 @@
-import { afterNextRender, Component, ElementRef, Input, OnChanges, OnDestroy, ViewChild, output, signal } from '@angular/core';
+import { afterNextRender, Component, effect, ElementRef, inject, Input, OnChanges, OnDestroy, ViewChild, output, signal } from '@angular/core';
 import { Chart, LineController, LineElement, PointElement, LinearScale, Tooltip, Filler, ChartDataset } from 'chart.js';
 import { MeasurementSeries } from './models';
+import { ThemeService } from '../theme.service';
 
 Chart.register(LineController, LineElement, PointElement, LinearScale, Tooltip, Filler);
 
 export interface ChartTimeRange { from: number; to: number; }
 
-export function seriesColor(group: string, sensor: string): string {
+function seriesHue(group: string, sensor: string): number {
   let hash = 0;
   for (const character of `${group}/${sensor}`) hash = ((hash << 5) - hash + character.charCodeAt(0)) | 0;
-  return `hsl(${Math.abs(hash) % 360}, 65%, 40%)`;
+  return Math.abs(hash) % 360;
+}
+
+/** Farbe je Gruppe/Sensor; im Darkmode heller, damit sie auf dunklem Grund lesbar bleibt. */
+export function seriesColor(group: string, sensor: string, dark = false): string {
+  return `hsl(${seriesHue(group, sensor)}, 65%, ${dark ? 65 : 40}%)`;
 }
 
 @Component({
@@ -19,7 +25,7 @@ export function seriesColor(group: string, sensor: string): string {
     <div class="mb-2 flex items-center gap-3">
       <button type="button" (click)="resetView.emit()" [disabled]="!viewRange"
         title="Ursprüngliche Ansicht wiederherstellen" aria-label="Ursprüngliche Ansicht beider Diagramme wiederherstellen"
-        class="rounded border border-slate-300 px-3 py-1 text-slate-700 hover:bg-slate-100 disabled:opacity-40">
+        class="rounded border border-slate-300 px-3 py-1 text-slate-700 hover:bg-slate-100 disabled:opacity-40 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-800">
         <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="m3 10 9-7 9 7M5 9v12h5v-7h4v7h5V9" />
         </svg>
@@ -94,8 +100,11 @@ export class MeasurementChart implements OnChanges, OnDestroy {
   private chart?: Chart<'line', { x: number; y: number | null }[]>;
   private ready = false;
 
+  private readonly theme = inject(ThemeService);
+
   constructor() {
     afterNextRender(() => { this.ready = true; this.render(); });
+    effect(() => { this.theme.dark(); if (this.ready) this.render(); });
   }
 
   ngOnChanges() { if (this.ready) this.render(); }
@@ -108,12 +117,13 @@ export class MeasurementChart implements OnChanges, OnDestroy {
     }
     if (!this.viewRange) this.originalY = undefined;
     this.chart?.destroy();
+    const dark = this.theme.dark();
+    const text = dark ? '#cbd5e1' : '#475569'; // slate-300 / slate-600
+    const grid = dark ? 'rgba(148, 163, 184, 0.18)' : 'rgba(100, 116, 139, 0.15)';
     const datasets: ChartDataset<'line', { x: number; y: number | null }[]>[] = [];
     for (const s of this.series) {
-      let hash = 0;
-      for (const character of `${s.group}/${s.sensor}`) hash = ((hash << 5) - hash + character.charCodeAt(0)) | 0;
-      const hue = Math.abs(hash) % 360;
-      const color = seriesColor(s.group, s.sensor);
+      const hue = seriesHue(s.group, s.sensor);
+      const color = seriesColor(s.group, s.sensor, dark);
       const points = (field: 'mean' | 'min' | 'max') => {
         const result: { x: number; y: number | null }[] = [];
         for (let i = 0; i < s.points.length; i++) {
@@ -130,7 +140,7 @@ export class MeasurementChart implements OnChanges, OnDestroy {
         datasets.push({ label: `${s.group} / ${s.sensor} · Minimum`, data: points('min'), borderWidth: 0,
           pointRadius: 0, fill: false, borderColor: color });
         datasets.push({ label: `${s.group} / ${s.sensor} · Maximum`, data: points('max'), borderWidth: 0,
-          pointRadius: 0, fill: '-1', backgroundColor: `hsla(${hue}, 65%, 40%, 0.14)`, borderColor: color });
+          pointRadius: 0, fill: '-1', backgroundColor: `hsla(${hue}, 65%, ${dark ? 65 : 40}%, ${dark ? 0.2 : 0.14})`, borderColor: color });
       }
       datasets.push({ label: `${s.group} / ${s.sensor}`, data: points('mean'), borderColor: color,
         backgroundColor: color, borderWidth: 2, pointRadius: s.points.length === 1 ? 4 : 0,
@@ -142,10 +152,12 @@ export class MeasurementChart implements OnChanges, OnDestroy {
         responsive: true, maintainAspectRatio: false, animation: false, parsing: false,
         interaction: { mode: 'nearest', intersect: false },
         scales: {
-          x: { type: 'linear', min: this.viewRange?.from ?? this.from, max: this.viewRange?.to ?? this.to, ticks: { maxTicksLimit: 6,
+          x: { type: 'linear', min: this.viewRange?.from ?? this.from, max: this.viewRange?.to ?? this.to, ticks: { maxTicksLimit: 6, color: text,
             callback: value => new Date(Number(value)).toLocaleString('de-AT', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) },
-            title: { display: true, text: 'Zeit (lokal)' } },
-          y: { min: this.originalY?.min, max: this.originalY?.max, title: { display: true, text: this.unit } },
+            grid: { color: grid }, border: { color: grid },
+            title: { display: true, text: 'Zeit (lokal)', color: text } },
+          y: { min: this.originalY?.min, max: this.originalY?.max, ticks: { color: text }, grid: { color: grid },
+            border: { color: grid }, title: { display: true, text: this.unit, color: text } },
         },
         plugins: { tooltip: { callbacks: {
           title: items => items.length ? new Date(items[0].parsed.x ?? 0).toLocaleString('de-AT') : '',

@@ -2,13 +2,314 @@
   "uid": "iiot-overview",
   "title": "IIoT \u00dcbersicht",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "10s",
   "time": {
     "from": "now-1h",
     "to": "now"
   },
   "panels": [
+    {
+      "id": 6,
+      "title": "Anzahl Sensoren",
+      "type": "stat",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "iiot-sqlite"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 8,
+        "h": 8
+      },
+      "description": "Sensoren = alle bekannten Gruppen. Aktiv = Messwert in den letzten 5 Minuten. Status aus iiot/group/+/status.",
+      "targets": [
+        {
+          "refId": "A",
+          "rawQueryText": "SELECT COUNT(*) AS sensoren, COALESCE(SUM(CASE WHEN last_seen >= CAST(strftime('%s','now') AS REAL) - 300 THEN 1 ELSE 0 END), 0) AS aktiv, COALESCE(SUM(CASE WHEN status='ok' THEN 1 ELSE 0 END), 0) AS status_ok, COALESCE(SUM(CASE WHEN status IN ('error','offline') THEN 1 ELSE 0 END), 0) AS gestoert FROM devices",
+          "queryText": "SELECT COUNT(*) AS sensoren, COALESCE(SUM(CASE WHEN last_seen >= CAST(strftime('%s','now') AS REAL) - 300 THEN 1 ELSE 0 END), 0) AS aktiv, COALESCE(SUM(CASE WHEN status='ok' THEN 1 ELSE 0 END), 0) AS status_ok, COALESCE(SUM(CASE WHEN status IN ('error','offline') THEN 1 ELSE 0 END), 0) AS gestoert FROM devices",
+          "queryType": "table",
+          "timeColumns": []
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 0,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "sensoren"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Sensoren"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "aktiv"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Aktiv (5 min)"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "status_ok"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Status ok"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "gestoert"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Error/Offline"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "orientation": "horizontal",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 7,
+      "title": "Ger\u00e4te\u00fcbersicht",
+      "type": "table",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "iiot-sqlite"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 16,
+        "h": 8
+      },
+      "description": "Alle Gruppen, unabh\u00e4ngig vom gew\u00e4hlten Zeitraum. Status: letzte Nachricht auf iiot/group/<gruppe>/status; letzte Verbindung: letzter Messwert.",
+      "targets": [
+        {
+          "refId": "A",
+          "rawQueryText": "SELECT group_name AS gruppe, status, status_updated_at, last_seen, ROUND(last_value, 2) AS letzter_wert, unit AS einheit, CASE WHEN last_seen >= CAST(strftime('%s','now') AS REAL) - 300 THEN 'aktiv' ELSE 'inaktiv' END AS aktivitaet FROM devices ORDER BY (status IN ('error','offline')) DESC, last_seen IS NULL, last_seen DESC",
+          "queryText": "SELECT group_name AS gruppe, status, status_updated_at, last_seen, ROUND(last_value, 2) AS letzter_wert, unit AS einheit, CASE WHEN last_seen >= CAST(strftime('%s','now') AS REAL) - 300 THEN 'aktiv' ELSE 'inaktiv' END AS aktivitaet FROM devices ORDER BY (status IN ('error','offline')) DESC, last_seen IS NULL, last_seen DESC",
+          "queryType": "table",
+          "timeColumns": [
+            "status_updated_at",
+            "last_seen"
+          ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "status"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "ok": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "error": {
+                        "color": "red",
+                        "index": 1
+                      },
+                      "offline": {
+                        "color": "red",
+                        "index": 2
+                      },
+                      "unknown": {
+                        "color": "orange",
+                        "index": 3
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "aktivitaet"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "aktiv": {
+                        "color": "green",
+                        "index": 0
+                      },
+                      "inaktiv": {
+                        "color": "orange",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "displayName",
+                "value": "Aktivit\u00e4t"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "status_updated_at"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Status seit"
+              },
+              {
+                "id": "unit",
+                "value": "dateTimeFromNow"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "last_seen"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Letzte Verbindung"
+              },
+              {
+                "id": "unit",
+                "value": "dateTimeFromNow"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "gruppe"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Gruppe"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "letzter_wert"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Letzte Temperatur"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "einheit"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Einheit"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
     {
       "id": 1,
       "title": "Temperatur",
@@ -19,7 +320,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 0,
+        "y": 8,
         "w": 12,
         "h": 9
       },
@@ -53,7 +354,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 0,
+        "y": 8,
         "w": 12,
         "h": 9
       },
@@ -87,15 +388,15 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 9,
+        "y": 17,
         "w": 12,
         "h": 9
       },
       "targets": [
         {
           "refId": "A",
-          "rawQueryText": "SELECT group_name, sensor_id, metric, unit, COUNT(*) AS samples, MIN(value) AS minimum, MAX(value) AS maximum, AVG(value) AS average FROM readings WHERE group_name IN (${group:sqlstring}) AND time >= $__from / 1000 AND time < $__to / 1000 GROUP BY group_name,sensor_id,metric,unit",
-          "queryText": "SELECT group_name, sensor_id, metric, unit, COUNT(*) AS samples, MIN(value) AS minimum, MAX(value) AS maximum, AVG(value) AS average FROM readings WHERE group_name IN (${group:sqlstring}) AND time >= $__from / 1000 AND time < $__to / 1000 GROUP BY group_name,sensor_id,metric,unit",
+          "rawQueryText": "SELECT group_name, sensor_id, metric, unit, COUNT(*) AS samples, ROUND(MIN(value), 2) AS minimum, ROUND(MAX(value), 2) AS maximum, ROUND(AVG(value), 2) AS average FROM readings WHERE group_name IN (${group:sqlstring}) AND time >= $__from / 1000 AND time < $__to / 1000 GROUP BY group_name,sensor_id,metric,unit",
+          "queryText": "SELECT group_name, sensor_id, metric, unit, COUNT(*) AS samples, ROUND(MIN(value), 2) AS minimum, ROUND(MAX(value), 2) AS maximum, ROUND(AVG(value), 2) AS average FROM readings WHERE group_name IN (${group:sqlstring}) AND time >= $__from / 1000 AND time < $__to / 1000 GROUP BY group_name,sensor_id,metric,unit",
           "queryType": "table",
           "timeColumns": [
             "time"
@@ -118,7 +419,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 9,
+        "y": 17,
         "w": 12,
         "h": 9
       },
@@ -149,7 +450,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 18,
+        "y": 26,
         "w": 24,
         "h": 9
       },
@@ -181,7 +482,7 @@
           "type": "frser-sqlite-datasource",
           "uid": "iiot-sqlite"
         },
-        "query": "SELECT DISTINCT group_name FROM readings ORDER BY group_name",
+        "query": "SELECT group_name FROM devices UNION SELECT DISTINCT group_name FROM readings ORDER BY 1",
         "refresh": 1,
         "multi": true,
         "includeAll": true,

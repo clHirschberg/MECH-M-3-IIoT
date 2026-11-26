@@ -1,0 +1,289 @@
+<!-- Automatisch erzeugt aus docs/Dokumentation.qmd (scripts/sync-docs.mjs) – nicht bearbeiten -->
+# Dokumentation
+
+Gruppe `kloepfer-brose-hirschberg-kal`. Der Einstieg ist das
+[README](https://github.com/clHirschberg/MECH-M-3-IIoT#readme) des Forks; diese Seite ergänzt
+Hintergründe, ausführlichere Anleitungen und den Developer-Teil. Betrieb und Datensicherung des
+Container-Stacks sind in [`infrastructure/README.md`](https://github.com/clHirschberg/MECH-M-3-IIoT/blob/main/infrastructure/README.md)
+beschrieben und werden hier nicht wiederholt.
+
+## Zusammenfassung der Aufgabenstellung und Ziele
+
+yourmuesli.at hat Qualitätsprobleme durch Temperatur und Luftfeuchte in der Abfüllung. Die
+Qualitätssicherung will die Werte aller Standorte zentral auf einem Dashboard sehen. Gefordert ist
+eine günstige, zentral entwickelte Lösung, die vor Ort von technisch wenig versierten Personen in
+Betrieb genommen und aus der Ferne überwacht und konfiguriert werden kann.
+
+Unsere Lösung:
+
+| Termin | Ziel | Umsetzung |
+|---|---|---|
+| 1 – Grundkonzepte | Messwerte spezifikationskonform per MQTT senden | ESP32 + DHT11, PlatformIO/Arduino, JSON nach [`conventions.md`](https://github.com/clHirschberg/MECH-M-3-IIoT/blob/main/docs/iot-specs/conventions.md) und [`asyncapi.yaml`](https://github.com/clHirschberg/MECH-M-3-IIoT/blob/main/docs/iot-specs/asyncapi.yaml), NTP-Zeitstempel, retained Status mit Last Will |
+| 2 – Netzwerke | Konfiguration über HTTP, Tests, Hinweise für die IT | REST-API `GET/POST /config`, `GET /status` nach [`openapi.yaml`](https://github.com/clHirschberg/MECH-M-3-IIoT/blob/main/docs/iot-specs/openapi.yaml) 1.2.0, Einstellungen im Flash (NVS), Tests mit pytest und Schemathesis |
+| 3 – Cloud | Daten aller Sensoren speichern und visualisieren | Docker Compose: Python-Collector → SQLite → Grafana und FastAPI-Lese-API → Angular-Website; Geräteübersicht aus `iiot/group/+/status`, Kennzahlen Min/Max/Mittelwert |
+
+### Architektur
+
+```mermaid
+flowchart LR
+  S[DHT11] -->|GPIO 4| E[ESP32 Firmware]
+  E -->|MQTT 1883, JSON| B[(Kurs-Broker 158.180.44.197)]
+  L[Browser / curl / Tests] -->|HTTP 80, nur LAN| E
+  B -->|iiot/group/#| C[Collector]
+  C --> D[(SQLite-Volume)]
+  D -->|read-only| G[Grafana :3000]
+  D -->|read-only| A[Lese-API :8000]
+  A --> W[Website :4200]
+```
+
+**Nachrichten des ESP32** (Gruppe `kloepfer-brose-hirschberg-kal`):
+
+| Topic | Payload | Retained |
+|---|---|---|
+| `…/sensor/temperature/state` | `{"timestamp":"2026-11-27T10:15:00Z","sensor_id":"iot-gruppe-5","value":21.4,"unit":"°C"}` | nein |
+| `…/sensor/humidity/state` | wie oben mit `"unit":"%"` | nein |
+| `…/status` | `{"status":"ok","timestamp":"…","sensor_id":"iot-gruppe-5"}`; `error` bei ungültiger Messung (NaN), zurück zu `ok` nach Erholung | ja |
+| `…/status` (Last Will) | `{"status":"offline","sensor_id":"iot-gruppe-5"}`, QoS 1 | ja |
+
+Der Status wird nur bei einem Wechsel gesendet. Ungültige Messwerte werden nicht publiziert.
+
+## Anleitung für User
+
+### Konfiguration und Start des Mikrocontrollers
+
+**Benötigt:** ESP32-DevKit, DHT11 (Modul mit 3 Pins), drei Jumper-Kabel, USB-Datenkabel, ein
+Rechner mit [VS Code](https://code.visualstudio.com/) und der Erweiterung *PlatformIO IDE*
+(alternativ `pip install platformio`).
+
+1. **Verkabeln** (ESP32 dabei nicht mit Strom versorgen):
+   DHT11 `VCC/+` → `3V3`, `DATA/out` → `GPIO 4`, `GND/-` → `GND`.
+   Ein einzelner DHT11 ohne Platine braucht zusätzlich 10 kΩ zwischen DATA und VCC.
+2. **Zugangsdaten eintragen:** Im Ordner `src/esp32_firmware` die Datei `.env.example` nach `.env`
+   kopieren und WLAN-Name, WLAN-Passwort und das Broker-Passwort eintragen. `.env` übernimmt beim
+   ESP32 die Rolle der `settings.toml` der Pico-Vorlage; sie wird nicht ins Git übernommen.
+   Das WLAN muss ein **2,4-GHz-Netz mit WPA2-Passwort** sein.
+3. **Flashen:** ESP32 per USB anschließen, in VS Code den Ordner `src/esp32_firmware` öffnen und
+   in der PlatformIO-Leiste *Upload* klicken – oder im Terminal `pio run -t upload`. Fehlt `.env`
+   oder ein Eintrag darin, bricht der Build mit einer Meldung ab.
+4. **Prüfen:** *Serial Monitor* öffnen (`pio device monitor`, 115200 Baud). Erwartete Ausgabe:
+
+   ```text
+   Connecting to WiFi: Firmen-WLAN
+   ....
+   WiFi connected. IP: 192.168.0.42
+   Waiting for NTP time sync..
+   Time synced: 2026-11-27T10:15:00Z
+   REST API listening on http://192.168.0.42/on port: 80
+   Attempting MQTT connection...connected!
+   Published status (retained): {"status":"ok",...}
+   Published iiot/group/kloepfer-brose-hirschberg-kal/sensor/temperature/state: {...}
+   ```
+
+   Die angezeigte IP-Adresse notieren – sie wird für die HTTP-API gebraucht.
+5. **Im Betrieb:** Der ESP32 kann danach an jedem USB-Netzteil laufen. Die Einstellungen (Intervall)
+   bleiben nach einem Neustart erhalten. Bricht die MQTT-Verbindung ab, versucht er alle 5 s neu zu
+   verbinden; die HTTP-API bleibt währenddessen erreichbar.
+
+**Sendeintervall ändern** – auf der Website (Tab *Geräte-API*, IP eingeben) oder per `curl`:
+
+```bash
+curl -X POST http://192.168.0.42/config -H 'Content-Type: application/json' \
+     -d '{"reading_interval_seconds": 60}'
+```
+
+Erlaubt sind 2–86400 Sekunden (DHT11 misst höchstens alle 2 s). Ungültige Werte werden mit `400`
+und einer Fehlermeldung abgelehnt; die alte Einstellung bleibt gültig.
+
+**Fehlerbehebung**
+
+| Symptom | Ursache / Abhilfe |
+|---|---|
+| Nur Punkte nach „Connecting to WiFi“ | SSID/Passwort falsch, 5-GHz-Netz, Gästenetz mit Anmeldeseite → `.env` prüfen, neu flashen |
+| „Waiting for NTP time sync“ endet nicht | UDP 123 gesperrt → IT-Abteilung (siehe unten) |
+| `failed, rc=5` / `rc=4` | Broker-Benutzer oder -Passwort falsch |
+| `failed, rc=-2` | Broker nicht erreichbar → TCP 1883 ausgehend freigeben |
+| „Invalid temperature reading“, Status `error` | Sensor falsch verkabelt oder defekt |
+| HTTP-API nicht erreichbar | Rechner nicht im selben Netz, Client-Isolation im WLAN, IP geändert |
+| Upload schlägt fehl | „Failed to start stub flasher“ → `upload_speed` in `platformio.ini` (115200) belassen/verringern; Nur-Lade-USB-Kabel, fehlender USB-Treiber (CP210x/CH340), ggf. `BOOT`-Taste halten |
+
+### Container-Lösung starten und nutzen
+
+Kurzfassung (Details im [README](https://github.com/clHirschberg/MECH-M-3-IIoT#container-starten)):
+
+```bash
+git clone https://github.com/clHirschberg/MECH-M-3-IIoT.git && cd MECH-M-3-IIoT
+cp .env.example .env     # MQTT_PASSWORD und GRAFANA_ADMIN_PASSWORD eintragen
+docker compose up -d --build
+docker compose ps
+```
+
+Danach Grafana unter <http://localhost:3000> (Benutzer `admin`, Passwort aus `.env`, Dashboard
+*IIoT → IIoT Übersicht*) und die Website unter <http://localhost:4200>. Der Collector speichert ab
+dem Start alle Nachrichten von `iiot/group/#`; neue Gruppen erscheinen automatisch. Ein Gerät gilt
+als *aktiv*, wenn innerhalb der letzten 5 Minuten ein Messwert eintraf.
+
+Wurde das Grafana-Passwort vergessen:
+
+```bash
+docker compose exec grafana grafana cli admin reset-admin-password '<neues-passwort>'
+```
+
+### Empfehlungen für die IT-Abteilung
+
+Der Sensor ist ein reiner Client im Standort-WLAN. Er baut nur ausgehende Verbindungen auf und
+stellt im LAN eine kleine HTTP-API zur Wartung bereit.
+
+| Richtung | Quelle → Ziel | Protokoll/Port | Zweck |
+|---|---|---|---|
+| ausgehend | ESP32 → `158.180.44.197` | TCP 1883 | MQTT (Messwerte, Status) |
+| ausgehend | ESP32 → `pool.ntp.org`, `time.nist.gov` | UDP 123 | Zeitsynchronisation |
+| ausgehend | ESP32 → DNS-Server | UDP/TCP 53 | Namensauflösung NTP |
+| lokal | ESP32 ↔ DHCP-Server | UDP 67/68 | IP-Adresse |
+| eingehend | Wartungsrechner (LAN) → ESP32 | TCP 80 | HTTP-API `/config`, `/status` |
+
+Anforderungen an das Netz: 2,4 GHz (802.11 b/g/n), WPA2-PSK, keine Anmeldeseite, keine
+Client-Isolation zwischen Wartungsrechner und Sensor. Empfohlen: eigenes IoT-VLAN, DHCP-Reservierung
+für die MAC-Adresse des Geräts, Firewall-Regel „ausgehend nur die obigen Ziele“, eingehend Port 80
+ausschließlich aus dem Wartungsnetz. Hinweis: Die Verbindung zum Broker ist unverschlüsselt;
+Messwerte und Broker-Zugangsdaten sind im Netz mitlesbar.
+
+**Diskussion: Fernzugriff auf die HTTP-API.** Die HTTP-API ist für die Wartung gedacht, das
+Wartungsteam sitzt aber in Innsbruck. Hindernisse und Gefahren:
+
+- *NAT und Firewall:* Das Gerät hat eine private Adresse und ist von außen nicht erreichbar.
+  Häufig liegt zusätzlich Carrier-Grade-NAT vor, dann hilft auch Port-Forwarding nicht.
+- *Port-Forwarding* (öffentlicher Port → ESP32:80) wäre technisch am einfachsten, ist aber nicht
+  vertretbar: Die API hat weder Authentifizierung noch TLS. Jeder Internet-Scanner könnte das
+  Intervall verstellen oder das Gerät mit Anfragen blockieren; der Webserver des ESP32 bearbeitet
+  Anfragen nacheinander und ist nicht gehärtet.
+- *VPN* (Firmen-VPN, Site-to-Site oder WireGuard auf einem Gateway am Standort): Der Wartungsrechner
+  wird Teil des Standortnetzes, die API bleibt intern. Das ist die empfohlene Variante, wenn die
+  HTTP-API beibehalten werden soll; Aufwand liegt bei der IT des Standorts.
+- *Reverse-Tunnel* (z.B. ein Raspberry Pi am Standort baut eine ausgehende SSH-/WireGuard-Verbindung
+  zu einem zentralen Server auf): funktioniert ohne Änderungen an der eingehenden Firewall, ist aber
+  ein zusätzliches Gerät, das gewartet und abgesichert werden muss.
+- *Alternative ohne eingehende Verbindung:* Konfiguration über MQTT. Der ESP32 abonniert z.B.
+  `iiot/group/<gruppe>/config/set` und meldet die übernommenen Werte zurück. Die ausgehende
+  Verbindung besteht ohnehin, es sind keine Firewall-Änderungen nötig. Voraussetzung ist ein Broker
+  mit TLS und Zugriffsrechten pro Gerät – für ein Produktivsystem unsere Empfehlung.
+
+## Anleitung für Developer
+
+### Werkzeuge
+
+- Das Repository ist ein `pdm`-Projekt (Python 3.12). `pdm install` installiert Quarto,
+  `pdm install -G test` zusätzlich pytest, requests und Schemathesis.
+- Dokumentation mit [Quarto](https://quarto.org/): `pdm run quarto preview` startet die Website
+  lokal, `pdm run quarto render` baut sie nach `_site/`. Die GitHub Action
+  `.github/workflows/publish.yml` veröffentlicht sie bei jedem Push auf `main`.
+- Firmware: PlatformIO (`pio run`, `pio run -t upload`, `pio device monitor`).
+- Container: Docker Compose ≥ 2.24.4; Website: Node.js 22 und Angular CLI 21.
+- Die Website zeigt diese Dokumentation im Tab *Dokumentation*. `Website/scripts/sync-docs.mjs`
+  kopiert `docs/Dokumentation.qmd` vor `npm start`, `npm run build` und `npm test` nach
+  `Website/public/docs/dokumentation.md`; die Kopie wird mit eingecheckt, weil der Docker-Build nur
+  `Website/` sieht. Nach Änderungen an der Doku also einmal `npm run sync-docs` ausführen und
+  committen. Hell/Dunkel/System lässt sich oben rechts umschalten (Quarto-Seite: Schalter in der
+  Navigationsleiste).
+
+### Struktur des Projekts
+
+Abweichend von der Vorlage liegt die Container-Lösung nicht in `src/cloud`, sondern in
+`infrastructure/` (Dienste) und `Website/` (Frontend); die Compose-Datei `compose.yaml` liegt im
+Hauptverzeichnis, damit `docker compose up` ohne Pfadangabe funktioniert.
+
+```text
+compose.yaml, .env.example      Container-Stack und Vorlage der Zugangsdaten
+src/esp32_firmware/             Firmware (unsere Lösung)
+  .env.example, load_env.py     Zugangsdaten → C-Makros beim Build
+  include/config_secure.h       Ports, Client-ID-Präfix, Platz für CA-Zertifikat (TLS)
+  src/Sensor.h                  Basisklasse: WLAN, NTP, MQTT, REST-API, Status
+  src/sensors/my_sensor.h       DHT11-Implementierung (Pin, Messung, Fehlerstatus)
+  src/main.cpp                  Setup/Loop und Implementierung der Sensor-Methoden
+src/raspi_firmware/             Pico-W-Vorlage (nicht verwendet)
+tests/                          HTTP-API-Tests gegen das Gerät
+infrastructure/collector/       MQTT → SQLite, Backup/Restore, Unit-Tests
+infrastructure/api/             FastAPI-Lese-API für die Website, Unit-Tests
+infrastructure/grafana/         Datenquelle und Dashboard (Provisioning)
+infrastructure/tests/           Integrationstest mit eigenem Broker (Compose-Projekt iiot-test)
+Website/                        Angular 21 (Geräte-API, Messdaten, Sensorübersicht, Doku)
+docs/                           Quarto-Doku, docs/iot-specs/ Spezifikationen
+```
+
+### Firmware erweitern
+
+Ein neuer Sensortyp wird als Unterklasse von `Sensor` angelegt (siehe `my_sensor.h`) und
+implementiert `readAndPublish()`; dort pro Messgröße `publishReading(metric, value, unit)` aufrufen
+und mit `setStatus("ok"|"error")` den Gerätestatus setzen. Gruppenname, Standard-Geräte-ID und
+Standardintervall (5 s) stehen im Konstruktor von `Sensor`; das Intervall wird in den Preferences
+(`sensor_config/sendInterval`) gespeichert. Für einen TLS-Broker `useSecureMqtt = true` in
+`main.cpp` setzen und das CA-Zertifikat in `config_secure.h` eintragen.
+
+### Datenmodell des Collectors
+
+SQLite-Schema Version 2 (`PRAGMA user_version`), ältere Datenbanken werden beim Start migriert:
+
+- `messages` – jede Rohnachricht (Topic, Bytes, Empfangszeit, QoS, Retained, Parserfehler).
+- `readings` – extrahierte Messwerte (`group_name`, `sensor_id`, `metric`, `value`, `unit`, `time`,
+  `time_source` = `device` oder `received`).
+- `devices` – je Gruppe `status`, `status_updated_at`, `last_seen`, `last_value`, `unit`.
+
+Toleranzen gegenüber anderen Gruppen: Gruppennamen werden kleingeschrieben, Status als JSON-Objekt,
+JSON-String oder Klartext akzeptiert (sonst `unknown`), Zahlen auch als String, fehlende Einheit bei
+Temperatur = °C, Kelvin wird umgerechnet. Zeitstempel ohne Zone gelten als UTC; weicht die Gerätezeit
+mehr als 300 s ab (z.B. `millis()`), wird die Empfangszeit verwendet. Nicht interpretierbare
+Nachrichten bleiben vollständig in `messages`.
+
+### Tests
+
+| Bereich | Befehl | Voraussetzung |
+|---|---|---|
+| HTTP-API (pytest + Schemathesis) | `DEVICE_URL=http://<esp-ip> pdm run pytest -v` | Gerät im selben Netz |
+| HTTP-API (Schemathesis-CLI) | `pdm run schemathesis run docs/iot-specs/openapi.yaml --url http://<esp-ip>` | Gerät |
+| HTTP-API manuell | `tests/device.http` in VS Code (*REST Client*) | Gerät |
+| Collector | `python3 -m unittest discover -s infrastructure/collector -v` | Python 3.12, `paho-mqtt` |
+| Lese-API | `cd infrastructure/api && pip install -r requirements.txt httpx && python3 -m unittest -v` | Python 3.12 |
+| Integration (Docker) | `python3 infrastructure/tests/integration.py` | Docker; Ports 3300/3301 frei |
+| Website | `cd Website && npm install && npm test` | Node.js 22 |
+| Spezifikationen | `npx @redocly/cli lint docs/iot-specs/openapi.yaml`, `npx @asyncapi/cli validate docs/iot-specs/asyncapi.yaml` | Node.js |
+
+Bekannte Grenze: Die Arduino-Bibliothek `WebServer` verwirft die Methode `QUERY` und
+`multipart/form-data` ohne Boundary bereits im HTTP-Parser und schließt die Verbindung ohne Antwort.
+Diese Schemathesis-Fälle prüft der pytest-Lauf deshalb darauf, dass das Gerät danach weiter antwortet;
+in der Schemathesis-CLI erscheinen sie als Fehler. Abhilfe wäre ein anderer HTTP-Server
+(z.B. ESPAsyncWebServer).
+
+Unter Linux braucht der Benutzer Zugriff auf `/dev/ttyUSB0` (Gruppe `dialout`:
+`sudo usermod -aG dialout $USER`, danach neu anmelden).
+
+Die HTTP-API-Tests werden ohne `DEVICE_URL` übersprungen und stellen das Sendeintervall nach dem Lauf
+wieder her, weil POST-Tests und Schemathesis die Konfiguration verändern. Der Integrationstest startet
+einen eigenen Mosquitto-Broker und sendet keine Nachrichten an den Kurs-Broker.
+
+### Bewusste Abweichungen und Entscheidungen
+
+An einigen Stellen weichen wir bewusst von der Vorlage oder der Spezifikation ab. Hier steht, was
+wir anders machen und warum.
+
+- **MQTT 3.1.1 statt MQTT 5:** In [`asyncapi.yaml`](https://github.com/clHirschberg/MECH-M-3-IIoT/blob/main/docs/iot-specs/asyncapi.yaml) steht MQTT 5. Die
+  Bibliothek, mit der unser ESP32 MQTT spricht (PubSubClient), kann aber nur die ältere Version
+  3.1.1. Für unser Projekt ist das kein Nachteil: Die Zusatzfunktionen von MQTT 5 brauchen wir nicht,
+  Topics und Nachrichten sehen genau gleich aus, und der Kurs-Broker versteht beide Versionen. Damit
+  alles einheitlich ist, nutzt auch der Collector 3.1.1.
+- **WLAN- und Broker-Zugangsdaten werden beim Flashen eingebaut:** Beim Pico W legt man die Daten
+  einfach als `settings.toml` auf das Gerät. Der ESP32 erscheint am Rechner aber nicht als
+  USB-Laufwerk, deshalb tragen wir die Daten in eine `.env`-Datei ein und sie werden beim Bauen der
+  Firmware übernommen. Für Leute ohne Entwicklungsumgebung wäre der nächste Schritt eine kleine
+  Einrichtungsseite, die der ESP32 beim ersten Start selbst als WLAN anbietet (z.B. mit WiFiManager).
+- **`/status` liefert ein paar Angaben mehr:** Zusätzlich zu den vorgegebenen Feldern zeigt der
+  ESP32 seinen Zustand (`status`), die WLAN-Signalstärke (`wifi_rssi`) und seine IP-Adresse (`ip`).
+  Das hilft bei der Fehlersuche vor Ort. In `openapi.yaml` haben wir außerdem beschrieben, wie
+  Fehlermeldungen aussehen und dass falsche HTTP-Methoden mit `405` beantwortet werden. Die
+  Spezifikation 1.2.0 erlaubt solche Ergänzungen.
+- **Die Website holt ihre Daten über eine eigene kleine API:** Wir hätten die Website auch auf
+  Grafana aufbauen können. Dann müsste man sich aber immer bei Grafana anmelden. Stattdessen liest
+  eine kleine API die Datenbank und gibt die Werte an die Website weiter. Sie darf die Datenbank nur
+  lesen, nicht verändern.
+- **Website und Grafana sind nur am eigenen Rechner erreichbar:** Der Stack ist für einen
+  Entwicklungsrechner gedacht, deshalb sind die Ports nur unter `127.0.0.1` freigegeben. Wer vom
+  Smartphone aus zugreifen will, bräuchte einen richtigen Server mit HTTPS und Anmeldung (siehe
+  Abschnitt Sicherheit im README).

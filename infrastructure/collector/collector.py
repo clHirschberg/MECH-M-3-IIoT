@@ -15,13 +15,18 @@ DB = os.getenv('DB_PATH', '/data/measurements.sqlite')
 LOG = logging.getLogger('collector')
 
 
+SCHEMA_VERSION = 2
+STATUS_VALUES = ('ok', 'error', 'offline')
+CLOCK_TOLERANCE_S = 300  # Gerätezeit, die weiter abweicht, wird durch die Empfangszeit ersetzt
+
+
 def connect_db(path=DB):
     db = sqlite3.connect(path, timeout=10)
     db.execute('PRAGMA foreign_keys=ON')
     db.execute('PRAGMA journal_mode=WAL')
     db.execute('PRAGMA synchronous=FULL')
     version = db.execute('PRAGMA user_version').fetchone()[0]
-    if version not in (0, 1):
+    if version not in (0, 1, SCHEMA_VERSION):
         raise RuntimeError(f'Unsupported database schema: {version}')
     db.executescript('''
         CREATE TABLE IF NOT EXISTS messages (
@@ -40,52 +45,168 @@ def connect_db(path=DB):
         CREATE INDEX IF NOT EXISTS readings_time ON readings(time);
         CREATE INDEX IF NOT EXISTS readings_sensor_time
             ON readings(group_name, sensor_id, metric, time);
-        PRAGMA user_version=1;
+        -- Eine Zeile pro Gruppe für die Geräteübersicht (Status aus iiot/group/+/status)
+        CREATE TABLE IF NOT EXISTS devices (
+            group_name        TEXT PRIMARY KEY,
+            status            TEXT NOT NULL DEFAULT 'unknown',  -- ok | error | offline | unknown
+            status_updated_at REAL,                             -- Zeitpunkt der letzten Statusnachricht
+            last_seen         REAL,                             -- Empfangszeit des letzten Messwerts
+            last_value        REAL,                             -- letzte Temperatur
+            unit              TEXT
+        );
     ''')
+    if version < SCHEMA_VERSION:
+        migrate_to_v2(db)
     return db
 
 
+def migrate_to_v2(db):
+    """Gruppennamen vereinheitlichen und die Geräteübersicht aus dem Bestand füllen."""
+    with db:
+        db.execute('UPDATE readings SET group_name = lower(group_name) WHERE group_name != lower(group_name)')
+        db.execute('''INSERT INTO devices(group_name, last_seen)
+            SELECT r.group_name, MAX(m.received_at) FROM readings r JOIN messages m ON m.id = r.message_id
+            GROUP BY r.group_name
+            ON CONFLICT(group_name) DO UPDATE SET last_seen = excluded.last_seen''')
+        db.execute('''UPDATE devices SET (last_value, unit) = (
+            SELECT value, unit FROM readings r WHERE r.group_name = devices.group_name
+            AND r.metric = 'temperature' ORDER BY r.time DESC LIMIT 1)''')
+        # Status-Nachrichten aus dem Roharchiv in zeitlicher Reihenfolge nachspielen
+        for topic, payload, received in db.execute(
+                "SELECT topic, payload, received_at FROM messages WHERE topic LIKE 'iiot/group/%/status' ORDER BY id").fetchall():
+            update_status(db, topic, payload, received)
+        db.execute(f'PRAGMA user_version={SCHEMA_VERSION}')
+
+
+def group_of(topic):
+    """Gruppenname aus iiot/group/<gruppe>/..., in Kleinbuchstaben (conventions.md)."""
+    parts = topic.split('/')
+    group = parts[2].strip().lower() if len(parts) > 2 else ''
+    if not group:
+        raise ValueError('Topic contains no group name')
+    return group
+
+
+def is_status_topic(topic):
+    parts = topic.split('/')
+    return len(parts) == 4 and parts[3] == 'status'
+
+
+def parse_status(payload):
+    """Liefert ok/error/offline/unknown oder None für einen leeren Payload.
+
+    Spezifikation: JSON-Objekt mit Feld "status". Ältere Geräte senden Klartext
+    oder einen JSON-String, beides wird ebenfalls verstanden.
+    """
+    try:
+        text = payload.decode('utf-8')
+    except UnicodeDecodeError:
+        return 'unknown'
+    if not text.strip():
+        return None  # Gelöschtes retained Topic
+    try:
+        data = json.loads(text)
+    except ValueError:
+        data = text
+    if isinstance(data, dict):
+        data = data.get('status')
+    if not isinstance(data, str):
+        return 'unknown'
+    status = data.strip().lower()
+    return status if status in STATUS_VALUES else 'unknown'
+
+
+def parse_timestamp(value, received):
+    """Gerätezeit als Unix-Zeit, oder Empfangszeit, wenn sie fehlt oder unplausibel ist."""
+    if not isinstance(value, str):
+        return received, 'received'  # fehlt oder z.B. millis()-Zahl
+    try:
+        dt = datetime.fromisoformat(value.strip().replace('Z', '+00:00'))
+    except ValueError:
+        return received, 'received'
+    if dt.utcoffset() is None:
+        dt = dt.replace(tzinfo=timezone.utc)  # ohne Zone gilt UTC
+    timestamp = dt.timestamp()
+    if abs(timestamp - received) > CLOCK_TOLERANCE_S:
+        return received, 'received'  # z.B. Uhr ohne NTP auf 1970
+    return timestamp, 'device'
+
+
+def parse_number(value, metric):
+    if isinstance(value, str):
+        value = float(value.strip())
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise ValueError(f'Invalid numeric value for {metric}')
+    return value
+
+
 def normalize(topic, payload, received):
-    if payload.strip() in (b'ok', b'error', b'offline'):
-        return []  # Existing devices also publish plain-text status messages.
+    """Wandelt eine Messwert-Nachricht in Zeilen für die Tabelle readings um."""
+    if payload.strip().lower() in (b'ok', b'error', b'offline'):
+        return []  # Klartext-Status auf einem Messwert-Topic
     data = json.loads(payload)
-    if isinstance(data, str) and data in ('ok', 'error', 'offline'):
+    if isinstance(data, str) and data.strip().lower() in STATUS_VALUES:
         return []
     if not isinstance(data, dict):
         raise ValueError('Expected JSON object')
     parts = topic.split('/')
-    group = parts[2] if len(parts) > 2 else 'unknown'
-    sensor = str(data.get('sensor_id') or data.get('sensorId') or topic)
-    timestamp = received
-    source = 'received'
-    if isinstance(data.get('timestamp'), str):
-        dt = datetime.fromisoformat(data['timestamp'].replace('Z', '+00:00'))
-        if dt.utcoffset() is None:
-            raise ValueError('Timestamp must contain timezone')
-        timestamp, source = dt.timestamp(), 'device'
+    group = group_of(topic)
+    sensor = str(data.get('sensor_id') or data.get('sensorId') or '-')
+    timestamp, source = parse_timestamp(data.get('timestamp'), received)
     values = []
     if 'value' in data:
         metric = parts[-2] if len(parts) > 2 else 'value'
-        values.append((metric, data['value'], str(data.get('unit', ''))))
+        default_unit = '°C' if metric == 'temperature' else ''
+        values.append((metric, data['value'], str(data.get('unit') or default_unit)))
     for metric, unit in [('temperature', '°C'), ('humidity', '%')]:
         if metric in data:
             values.append((metric, data[metric], unit))
     result = []
     for metric, value, unit in values:
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
-            raise ValueError(f'Invalid numeric value for {metric}')
+        value = parse_number(value, metric)
+        if metric == 'temperature' and unit == 'K':
+            value, unit = round(value - 273.15, 2), '°C'
         result.append((timestamp, source, group, sensor, metric, value, unit))
     return result
+
+
+def update_status(db, topic, payload, received):
+    status = parse_status(payload)
+    if status is None:
+        return
+    updated_at = received
+    try:
+        data = json.loads(payload)
+        if isinstance(data, dict):
+            updated_at, _ = parse_timestamp(data.get('timestamp'), received)
+    except ValueError:
+        pass
+    db.execute('''INSERT INTO devices(group_name, status, status_updated_at) VALUES(?,?,?)
+        ON CONFLICT(group_name) DO UPDATE SET status = excluded.status,
+        status_updated_at = excluded.status_updated_at''', (group_of(topic), status, updated_at))
+
+
+def update_last_seen(db, readings, received):
+    for _, _, group, _, metric, value, unit in readings:
+        db.execute('''INSERT INTO devices(group_name, last_seen) VALUES(?,?)
+            ON CONFLICT(group_name) DO UPDATE SET last_seen = excluded.last_seen''', (group, received))
+        if metric == 'temperature':
+            db.execute('UPDATE devices SET last_value = ?, unit = ? WHERE group_name = ?', (value, unit, group))
 
 
 def store(db, topic, payload, qos=0, retained=False, received=None):
     received = time.time() if received is None else received
     error = None
-    try:
-        readings = normalize(topic, payload, received)
-    except (ValueError, TypeError, OverflowError, UnicodeError) as exc:
-        readings, error = [], str(exc)
+    readings = []
     with db:
+        try:
+            if is_status_topic(topic):
+                update_status(db, topic, payload, received)
+            else:
+                readings = normalize(topic, payload, received)
+                update_last_seen(db, readings, received)
+        except (ValueError, TypeError, OverflowError, UnicodeError) as exc:
+            readings, error = [], str(exc)
         mid = db.execute(
             'INSERT INTO messages(received_at,topic,payload,qos,retained,parse_error) VALUES(?,?,?,?,?,?)',
             (received, topic, payload, qos, int(retained), error)).lastrowid
@@ -118,7 +239,7 @@ def restore(source_path):
     with closing(sqlite3.connect(f'file:{source_path}?mode=ro', uri=True)) as source:
         if source.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
             raise RuntimeError('Source integrity check failed')
-        if source.execute('PRAGMA user_version').fetchone()[0] != 1:
+        if source.execute('PRAGMA user_version').fetchone()[0] not in (1, SCHEMA_VERSION):
             raise RuntimeError('Unsupported backup schema')
         with closing(sqlite3.connect(temporary)) as target:
             source.backup(target)

@@ -1,0 +1,39 @@
+# Manuelle Tests der Geräte-API mit der VS-Code-Erweiterung "REST Client".
+# IP-Adresse des Geräts aus dem seriellen Monitor eintragen.
+@device = http://192.168.0.100
+
+### Konfiguration abrufen
+GET {{device}}/config
+
+### Sendeintervall auf 10 s setzen
+POST {{device}}/config
+Content-Type: application/json
+
+{"reading_interval_seconds": 10}
+
+### Status abrufen
+GET {{device}}/status
+
+### Fehlerfall: Intervall zu klein -> 400
+POST {{device}}/config
+Content-Type: application/json
+
+{"reading_interval_seconds": 1}
+
+### Fehlerfall: device_id ist nicht änderbar -> 400
+POST {{device}}/config
+Content-Type: application/json
+
+{"reading_interval_seconds": 10, "device_id": "neu"}
+
+### Fehlerfall: kaputtes JSON -> 400
+POST {{device}}/config
+Content-Type: application/json
+
+{"reading_interval_seconds":
+
+### Fehlerfall: unbekannter Pfad -> 404
+GET {{device}}/gibt-es-nicht
+
+### Fehlerfall: falsche Methode -> 405
+DELETE {{device}}/config

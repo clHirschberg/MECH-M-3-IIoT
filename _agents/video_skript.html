@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video-Skript Abgabe</title>
+<style>
+  :root {
+    --bg: #fafaf7; --fg: #1d1d1b; --muted: #66645e; --card: #ffffff; --line: #e3e1da;
+    --accent: #1f6feb; --say: #eef4ff; --say-line: #1f6feb; --warn: #fff4e0; --warn-line: #d98a00;
+    --code: #f2f1ec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16171a; --fg: #e8e6e1; --muted: #9b998f; --card: #1e2024; --line: #33353b;
+      --accent: #6ea8ff; --say: #1b2638; --say-line: #6ea8ff; --warn: #33291a; --warn-line: #e0a63a;
+      --code: #26282d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.8rem; margin: 0 0 4px; }
+  h2 { font-size: 1.25rem; margin: 40px 0 12px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  td.t { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .scene { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+           padding: 18px 20px; margin: 18px 0; break-inside: avoid; }
+  .scene h3 { margin: 0 0 2px; font-size: 1.1rem; }
+  .meta { color: var(--muted); font-size: .9rem; margin-bottom: 12px; }
+  .label { font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+           font-weight: 700; margin: 14px 0 6px; }
+  .say { background: var(--say); border-left: 4px solid var(--say-line); padding: 10px 14px;
+         border-radius: 0 6px 6px 0; font-style: italic; }
+  .say p { margin: 0 0 8px; } .say p:last-child { margin: 0; }
+  .warn { background: var(--warn); border-left: 4px solid var(--warn-line); padding: 10px 14px;
+          border-radius: 0 6px 6px 0; margin: 12px 0; }
+  ul, ol { padding-left: 22px; margin: 6px 0; }
+  li { margin: 3px 0; }
+  code { background: var(--code); padding: 1px 5px; border-radius: 4px; font-size: .88em;
+         font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  pre { background: var(--code); padding: 10px 12px; border-radius: 6px; overflow-x: auto;
+        font-size: .85rem; margin: 6px 0; }
+  pre code { background: none; padding: 0; }
+  .check li { list-style: none; margin-left: -22px; }
+  .check input { margin-right: 8px; }
+  @media print { body { background: #fff; } .scene { border-color: #ccc; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Video-Skript: IIoT-Abgabe</h1>
+  <p class="sub">Gruppe <code>kloepfer-brose-hirschberg-kal</code> · Ziel: 4 Minuten (erlaubt 3–5) ·
+    Reihenfolge laut Abgabeseite, Schnitte erlaubt · Sprechtext ist ein Vorschlag, frei formulieren.</p>
+
+  <h2>Ablauf auf einen Blick</h2>
+  <table>
+    <tr><th>#</th><th>Szene</th><th>Dauer</th><th>Bildschirm</th></tr>
+    <tr><td>0</td><td>Intro</td><td class="t">0:15</td><td>README auf GitHub</td></tr>
+    <tr><td>1</td><td>Gerät startet</td><td class="t">0:30</td><td>ESP32 (Kamera/Foto) + serielle Konsole</td></tr>
+    <tr><td>2</td><td>MQTT + Last Will</td><td class="t">0:40</td><td>MQTT Explorer</td></tr>
+    <tr><td>3</td><td>HTTP-API + Tests</td><td class="t">0:55</td><td>Terminal, MQTT Explorer</td></tr>
+    <tr><td>4</td><td>Container starten</td><td class="t">0:20</td><td>Terminal</td></tr>
+    <tr><td>5</td><td>Dashboard live</td><td class="t">0:30</td><td>Grafana, Website</td></tr>
+    <tr><td>6</td><td>Bewertungsstufen</td><td class="t">0:50</td><td>Terminal, Grafana</td></tr>
+    <tr><td></td><td><strong>Summe</strong></td><td class="t"><strong>≈ 4:00</strong></td><td></td></tr>
+  </table>
+
+  <h2>Vorbereitung (vor der Aufnahme)</h2>
+  <div class="warn"><strong>Keine Passwörter im Bild:</strong> <code>.env</code>-Dateien nicht öffnen,
+    im MQTT Explorer die Verbindungsmaske nicht zeigen (vorher verbinden), Terminal-Verlauf mit
+    Passwörtern löschen (<code>clear</code>), Grafana-Login vorher erledigen.</div>
+  <ul class="check">
+    <li><label><input type="checkbox"> ESP32 mit aktueller Firmware geflasht, DHT11 an GPIO 4, per USB am Laptop</label></li>
+    <li><label><input type="checkbox"> Zugriff auf die serielle Schnittstelle: <code>sudo chmod a+rw /dev/ttyUSB0</code></label></li>
+    <li><label><input type="checkbox"> Laptop im selben WLAN wie der ESP32, IP bekannt (zuletzt <code>192.168.68.62</code>)</label></li>
+    <li><label><input type="checkbox"> MQTT Explorer verbunden mit <code>158.180.44.197:1883</code>, Topic-Baum auf <code>iiot/group/kloepfer-brose-hirschberg-kal</code> aufgeklappt</label></li>
+    <li><label><input type="checkbox"> Stack einmal vorab gebaut (<code>docker compose up -d --build</code>), dann <code>docker compose stop</code>, damit Szene 4 schnell startet</label></li>
+    <li><label><input type="checkbox"> Browser-Tabs: README auf GitHub, Grafana (eingeloggt), Website <code>localhost:4200</code></label></li>
+    <li><label><input type="checkbox"> Terminal-Schrift groß (≥ 16 pt), dunkles oder helles Theme einheitlich</label></li>
+    <li><label><input type="checkbox"> Test-Umgebung bereit: <code>pdm install -G test</code> (bei ROS im PYTHONPATH: Befehle mit <code>env -u PYTHONPATH</code>)</label></li>
+    <li><label><input type="checkbox"> Befehle aus diesem Skript in eine Textdatei kopiert (IP eingesetzt) zum schnellen Einfügen</label></li>
+    <li><label><input type="checkbox"> Mikrofon getestet, Benachrichtigungen aus</label></li>
+  </ul>
+
+  <!-- Szene 0 -->
+  <div class="scene">
+    <h3>0 · Intro</h3>
+    <div class="meta">0:15 · README des Forks auf GitHub, kurz scrollen bis zum Architekturdiagramm</div>
+    <div class="say">
+      <p>Hallo, wir sind Oskar Klöpfer, Carl Hirschberg, Can Kal und Daniel Brose, Gruppe
+      kloepfer-brose-hirschberg-kal. Wir zeigen unsere Lösung für yourmuesli.at: Ein ESP32 mit DHT11
+      misst Temperatur und Luftfeuchte, sendet per MQTT an den Kurs-Broker, und ein Docker-Stack
+      speichert die Daten aller Gruppen in SQLite und zeigt sie in Grafana und auf einer eigenen Website.</p>
+    </div>
+  </div>
+
+  <!-- Szene 1 -->
+  <div class="scene">
+    <h3>1 · Gerät startet</h3>
+    <div class="meta">0:30 · Kurz Foto/Kamera der Verkabelung, dann serielle Konsole</div>
+    <div class="label">Zeigen</div>
+    <pre><code>cd src/esp32_firmware
+pio device monitor        # danach EN/RESET-Taste am ESP32 drücken</code></pre>
+    <ul>
+      <li>DHT11 an 3V3, GND und GPIO 4</li>
+      <li>Ausgabe: <code>WiFi connected. IP: …</code>, <code>Time synced: …Z</code>, <code>connected!</code>, erste <code>Published …</code>-Zeilen</li>
+    </ul>
+    <div class="label">Sagen</div>
+    <div class="say">
+      <p>Der DHT11 hängt an 3,3 Volt, Masse und GPIO 4. WLAN- und Broker-Zugangsdaten kommen aus einer
+      .env-Datei, die beim Kompilieren eingebunden wird – sie ist nicht im Repository.</p>
+      <p>Nach dem Reset verbindet sich der ESP32 mit dem WLAN, hier sieht man die IP-Adresse,
+      holt die Uhrzeit per NTP in UTC und verbindet sich mit dem Broker. Danach sendet er alle fünf
+      Sekunden Temperatur und Luftfeuchte.</p>
+    </div>
+  </div>
+
+  <!-- Szene 2 -->
+  <div class="scene">
+    <h3>2 · MQTT: Messwerte, Status, Last Will</h3>
+    <div class="meta">0:40 · MQTT Explorer · Schnitt während der ~20 s Wartezeit</div>
+    <div class="label">Zeigen</div>
+    <ol>
+      <li><code>…/sensor/temperature/state</code> anklicken: Payload mit <code>timestamp</code>, <code>value</code>, <code>unit</code>, <code>sensor_id</code></li>
+      <li><code>…/sensor/humidity/state</code> kurz zeigen</li>
+      <li><code>…/status</code>: <code>{"status":"ok",…}</code>, retained</li>
+      <li>USB-Kabel ziehen → <em>Schnitt</em> → <code>{"status":"offline",…}</code> erscheint</li>
+      <li>Wieder einstecken → Status springt auf <code>ok</code> (Konsole ggf. neu öffnen)</li>
+    </ol>
+    <div class="label">Sagen</div>
+    <div class="say">
+      <p>Im MQTT Explorer sieht man unsere Topics nach der Konvention iiot/group/Gruppenname/sensor/Messgröße/state.
+      Jede Nachricht ist JSON mit Zeitstempel in UTC, Wert, Einheit und Sensor-ID.</p>
+      <p>Auf dem Status-Topic steht retained „ok“. Beim Verbinden hinterlegen wir beim Broker einen
+      Last Will. Wenn wir das Gerät jetzt abstecken …</p>
+      <p>… meldet der Broker nach Ablauf des Keep-Alive automatisch „offline“. Liefert der Sensor
+      ungültige Werte, senden wir „error“. Nach dem Einstecken steht der Status wieder auf „ok“.</p>
+    </div>
+  </div>
+
+  <!-- Szene 3 -->
+  <div class="scene">
+    <h3>3 · HTTP-API und Testfälle</h3>
+    <div class="meta">0:55 · Terminal links, MQTT Explorer rechts · Testlauf (~45 s) schneiden</div>
+    <div class="label">Zeigen</div>
+    <pre><code>curl http://192.168.68.62/status
+curl http://192.168.68.62/config
+curl -X POST http://192.168.68.62/config -H 'Content-Type: application/json' \
+     -d '{"reading_interval_seconds": 10}'</code></pre>
+    <ul>
+      <li>Im MQTT Explorer: Nachrichten kommen jetzt im 10-s-Takt (Zeitstempel vergleichen)</li>
+      <li>Optional: Fehlerfall <code>curl -X POST … -d '{"reading_interval_seconds": 1}'</code> → 400</li>
+    </ul>
+    <pre><code>DEVICE_URL=http://192.168.68.62 pdm run pytest -v</code></pre>
+    <ul><li>Anfang zeigen, schneiden, Ende <code>35 passed</code> zeigen</li></ul>
+    <div class="label">Sagen</div>
+    <div class="say">
+      <p>Im lokalen Netz bietet der ESP32 eine HTTP-API nach unserer OpenAPI-Spezifikation.
+      GET /status liefert Uptime, WLAN- und MQTT-Verbindung und den letzten Messwert, GET /config die
+      aktuelle Konfiguration.</p>
+      <p>Mit POST setzen wir das Sendeintervall auf zehn Sekunden. Der Wert wird im Flash gespeichert,
+      und im MQTT Explorer sieht man, dass die Nachrichten jetzt alle zehn Sekunden kommen. Ungültige
+      Werte, kaputtes JSON, falsche Pfade oder Methoden beantwortet das Gerät mit 400, 404 oder 405.</p>
+      <p>Unsere Testfälle laufen mit pytest gegen das echte Gerät: gezielte Tests für alle Endpunkte und
+      Fehlerfälle und zusätzlich Schemathesis, das aus der OpenAPI-Spezifikation automatisch Anfragen
+      erzeugt und die Antworten gegen das Schema prüft. Alle 35 Tests sind grün; danach wird das
+      ursprüngliche Intervall wiederhergestellt.</p>
+    </div>
+  </div>
+
+  <!-- Szene 4 -->
+  <div class="scene">
+    <h3>4 · Container starten</h3>
+    <div class="meta">0:20 · Terminal im Hauptverzeichnis</div>
+    <div class="label">Zeigen</div>
+    <pre><code>docker compose up -d
+docker compose ps</code></pre>
+    <ul><li>Vier Dienste <code>collector</code>, <code>api</code>, <code>grafana</code>, <code>website</code> mit <code>healthy</code></li></ul>
+    <div class="label">Sagen</div>
+    <div class="say">
+      <p>Der ganze Stack startet aus dem Repository mit docker compose up. Nach einem frischen Clone
+      muss man nur die .env.example kopieren und das Broker- und ein Grafana-Passwort eintragen.
+      Es laufen vier Container: der Collector, der alle Gruppen vom Broker abonniert und in SQLite
+      speichert, Grafana, eine kleine Lese-API und unsere Angular-Website.</p>
+    </div>
+  </div>
+
+  <!-- Szene 5 -->
+  <div class="scene">
+    <h3>5 · Dashboard mit Live-Daten</h3>
+    <div class="meta">0:30 · Grafana „IIoT Übersicht“, dann kurz Website-Tab „Messdaten“</div>
+    <div class="label">Zeigen</div>
+    <ul>
+      <li>Grafana <code>localhost:3000</code> → IIoT Übersicht, Zeitraum „Last 15 minutes“, Gruppe auf unsere filtern</li>
+      <li>Ein paar Sekunden warten: neuer Punkt erscheint (Auto-Refresh 10 s oben rechts)</li>
+      <li>Optional Sensor mit der Hand anwärmen → Kurve steigt</li>
+      <li>Website <code>localhost:4200</code> → Messdaten, Aktualisierung 5 s</li>
+    </ul>
+    <div class="label">Sagen</div>
+    <div class="say">
+      <p>Im Grafana-Dashboard sehen wir Temperatur und Luftfeuchte live, das Dashboard aktualisiert sich
+      alle zehn Sekunden. Wenn ich den Sensor anfasse, steigt die Temperatur. Dieselben Daten zeigt
+      auch unsere Website, mit Filtern für Zeitraum, Gruppe und Sensor.</p>
+    </div>
+  </div>
+
+  <!-- Szene 6 -->
+  <div class="scene">
+    <h3>6 · Bewertungsstufen</h3>
+    <div class="meta">0:50 · Terminal + Grafana</div>
+
+    <div class="label">a) Datenbank – befriedigend</div>
+    <pre><code>docker compose exec collector python -c "import sqlite3; d=sqlite3.connect('/data/measurements.sqlite'); [print(r) for r in d.execute('SELECT group_name, sensor_id, metric, value, unit, datetime(time, \'unixepoch\') FROM readings ORDER BY id DESC LIMIT 5')]"</code></pre>
+    <div class="say"><p>Die Daten liegen in einer SQLite-Datenbank in einem Docker-Volume: Rohnachrichten,
+      Messwerte und eine Gerätetabelle. Hier die letzten Messwerte.</p></div>
+
+    <div class="label">b) Neuer Sensor ohne Konfiguration – gut</div>
+    <pre><code>mosquitto_pub -h 158.180.44.197 -u bobm -P "$MQTT_PASSWORD" \
+  -t 'iiot/group/test-kloepfer/sensor/temperature/state' \
+  -m '{"timestamp":"2026-11-27T12:00:00Z","value":23.5,"unit":"°C","sensor_id":"demo"}'</code></pre>
+    <ul><li>Passwort nicht tippen/zeigen: vorher <code>export MQTT_PASSWORD=…</code> außerhalb der Aufnahme, oder im MQTT Explorer unter „Publish“ senden. Zeitstempel auf die aktuelle UTC-Zeit setzen.</li>
+      <li>Grafana neu laden → Gruppe <code>test-kloepfer</code> erscheint in Gruppenfilter und Geräteübersicht</li></ul>
+    <div class="say"><p>Der Collector abonniert iiot/group/#, neue Sensoren werden also ohne Konfiguration
+      aufgenommen. Wir senden eine Testnachricht für eine neue Gruppe, und sie erscheint sofort im Dashboard.
+      Andere Gruppen sieht man hier ja ohnehin schon.</p></div>
+
+    <div class="label">c) Geräteübersicht – sehr gut</div>
+    <ul><li>Panels „Anzahl Sensoren“ und „Geräteübersicht“ oben im Dashboard</li></ul>
+    <div class="say"><p>Für die Übersicht wertet der Collector zusätzlich die Status-Topics aller Gruppen aus.
+      Oben sehen wir die Anzahl bekannter und aktiver Sensoren und in der Tabelle für jede Gruppe den
+      Status – ok grün, error und offline rot –, wann die letzte Statusmeldung und der letzte Messwert kamen.
+      Unser Gerät von vorhin war zwischenzeitlich offline und ist jetzt wieder ok.</p></div>
+
+    <div class="label">d) Kennzahlen – Bonus</div>
+    <ul><li>Tabelle „Alle Messwerte im Zeitraum“: Minimum, Maximum, Mittelwert, Anzahl</li></ul>
+    <div class="say"><p>Als Bonus berechnet das Dashboard für den gewählten Zeitraum Minimum, Maximum und
+      Mittelwert pro Sensor.</p></div>
+  </div>
+
+  <!-- Outro -->
+  <div class="scene">
+    <h3>Outro (optional)</h3>
+    <div class="meta">0:10 · README</div>
+    <div class="say">
+      <p>Die Anleitung für Nutzer, Hinweise für die IT-Abteilung zu Firewall und Fernzugriff und die
+      Developer-Doku stehen im README und in der Dokumentation im Repository. Danke!</p>
+    </div>
+  </div>
+
+  <h2>Nach der Aufnahme</h2>
+  <ul class="check">
+    <li><label><input type="checkbox"> Video komplett durchsehen: kein Passwort, keine <code>.env</code> im Bild</label></li>
+    <li><label><input type="checkbox"> Länge 3–5 Minuten</label></li>
+    <li><label><input type="checkbox"> Hochladen „nicht gelistet“ (YouTube) oder OneDrive-Link ohne Anmeldung; im privaten Fenster testen</label></li>
+    <li><label><input type="checkbox"> Link im README unter „Video“ eintragen (ersetzt <code>TODO Link einfügen</code>)</label></li>
+    <li><label><input type="checkbox"> Intervall am Gerät wieder auf 5 s (<code>{"reading_interval_seconds": 5}</code>)</label></li>
+  </ul>
+</main>
+</body>
+</html>

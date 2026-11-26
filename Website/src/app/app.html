@@ -1,10 +1,18 @@
-<div class="min-h-screen bg-slate-100 text-slate-900">
-  <nav aria-label="Hauptnavigation" class="border-b border-slate-200 bg-white px-4 sm:px-6">
-    <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-6">
-      <span class="py-4 font-bold text-slate-800">IIoT</span>
-      <div class="flex gap-1">
-        <a routerLink="/" [routerLinkActiveOptions]="{ exact: true }" routerLinkActive="!border-blue-600 !text-blue-700" ariaCurrentWhenActive="page" class="border-b-2 border-transparent px-4 py-4 text-sm font-medium text-slate-600 hover:text-blue-700">Geräte-API</a>
-        <a routerLink="/messdaten" routerLinkActive="!border-blue-600 !text-blue-700" ariaCurrentWhenActive="page" class="border-b-2 border-transparent px-4 py-4 text-sm font-medium text-slate-600 hover:text-blue-700">Messdaten</a>
+<div class="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+  <nav aria-label="Hauptnavigation" class="border-b border-slate-200 bg-white px-4 sm:px-6 dark:border-slate-800 dark:bg-slate-900">
+    <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6">
+      <span class="py-4 font-bold text-slate-800 dark:text-slate-200">IIoT</span>
+      <div class="flex flex-wrap gap-1">
+        <a routerLink="/" [routerLinkActiveOptions]="{ exact: true }" routerLinkActive="!border-blue-600 !text-blue-700 dark:!border-blue-400 dark:!text-blue-400" ariaCurrentWhenActive="page" class="border-b-2 border-transparent px-4 py-4 text-sm font-medium text-slate-600 hover:text-blue-700 dark:text-slate-400 dark:hover:text-blue-400">Geräte-API</a>
+        <a routerLink="/messdaten" routerLinkActive="!border-blue-600 !text-blue-700 dark:!border-blue-400 dark:!text-blue-400" ariaCurrentWhenActive="page" class="border-b-2 border-transparent px-4 py-4 text-sm font-medium text-slate-600 hover:text-blue-700 dark:text-slate-400 dark:hover:text-blue-400">Messdaten</a>
+        <a routerLink="/doku" routerLinkActive="!border-blue-600 !text-blue-700 dark:!border-blue-400 dark:!text-blue-400" ariaCurrentWhenActive="page" class="border-b-2 border-transparent px-4 py-4 text-sm font-medium text-slate-600 hover:text-blue-700 dark:text-slate-400 dark:hover:text-blue-400">Dokumentation</a>
+      </div>
+      <div role="radiogroup" aria-label="Farbschema" class="my-2 ml-auto flex rounded-lg border border-slate-300 p-0.5 text-xs dark:border-slate-700">
+        @for (option of themeOptions; track option.mode) {
+          <button type="button" role="radio" [attr.aria-checked]="theme.mode() === option.mode" (click)="theme.setMode(option.mode)"
+            [class]="theme.mode() === option.mode ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'"
+            class="rounded-md px-2.5 py-1 font-medium">{{ option.label }}</button>
+        }
       </div>
     </div>
   </nav>

@@ -57,6 +57,19 @@ if __name__ == '__main__':
     assert count() == before+800, (before, count())
     assert query('SELECT COUNT(*) FROM messages')[0][0] == before+800
     assert query('SELECT COUNT(*) FROM readings')[0][0] >= 1600
+    # Geräteübersicht: Status aus iiot/group/+/status (JSON, Klartext, ungültig).
+    # Ohne retain, sonst liefert der Broker sie nach jedem Reconnect erneut und die Zählung unten stimmt nicht.
+    for group, payload in [('test-0', '{"status":"ok","sensor_id":"esp-0"}'), ('test-1', 'OFFLINE'),
+                           ('test-2', 'kaputt'), ('test-status-only', '{"status":"error"}')]:
+        compose('exec','-T','broker','mosquitto_pub','-h','localhost','-q','1',
+                '-t',f'iiot/group/{group}/status','-m',payload)
+    before += 4
+    time.sleep(2)
+    devices = dict(zip(*query("SELECT group_name, status FROM devices WHERE group_name LIKE 'test-%' ORDER BY 1")))
+    assert devices['test-0'] == 'ok' and devices['test-1'] == 'offline', devices
+    assert devices['test-2'] == 'unknown' and devices['test-status-only'] == 'error', devices
+    assert devices['test-7'] == 'unknown', devices  # nur Messwerte, kein Status
+    print('Device overview verified')
     dashboard = request('/api/dashboards/uid/iiot-overview')['dashboard']
     assert dashboard['title'] == 'IIoT Übersicht'
     for panel in dashboard['panels']:

@@ -1,3 +1,8 @@
-/* You can add global styles to this file, and also import other style files */
-
 @import 'tailwindcss';
+@plugin '@tailwindcss/typography';
+
+/* Darkmode per Klasse .dark auf <html> (ThemeService, Startskript in index.html) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+html { background-color: var(--color-slate-100); }
+html.dark { background-color: var(--color-slate-950); color-scheme: dark; }
