@@ -12,6 +12,7 @@ Tailwind 4 (PostCSS), Chart.js 4.6.1, Tests mit vitest + jsdom, Prettier. Node 2
 |---|---|---|
 | `/` | `frontend/dashboard.ts` (`Dashboard`) | **Geräte-API** |
 | `/messdaten` | `measurements/measurements.ts` (lazy) | **Messdaten** |
+| `/doku` | `docs/documentation.ts` (lazy) | **Dokumentation** (aus `docs/Dokumentation.qmd`, via `scripts/sync-docs.mjs`) |
 | `**` | Redirect `/` | |
 
 ## Tab „Geräte-API“ (`frontend/dashboard.*`, `api/esp-api.service.ts`)
@@ -40,6 +41,11 @@ Möglicher Ausbau für *sehr gut* / iPhone-Storyline:
 - Neuer Bereich/Tab **„Geräte“** mit Anzahl Sensoren, Status (ok/error/offline/unknown), letzter Verbindung,
   letztem Wert – basierend auf `GET /api/devices` (AP4). Grafana-Panel reicht formal aber aus.
 - Mobile-Ansicht prüfen (QS-Leiter am iPhone).
+
+## Darkmode
+
+`theme.service.ts` (Hell/Dunkel/System, Umschalter in der Navigation), Tailwind-Variante `dark:` per Klasse
+(`styles.css`), Chart-Farben folgen `ThemeService.dark()`.
 
 ## Tests
 

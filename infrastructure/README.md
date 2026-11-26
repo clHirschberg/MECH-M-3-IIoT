@@ -1,7 +1,8 @@
 # Lokales IIoT-System mit Angular, SQLite und Grafana
 
 Der Python-Collector speichert die Nachrichten des bestehenden Kurs-Brokers.
-Die Firmware bleibt unverändert. Jeder Rechner führt ein unabhängiges Archiv.
+Einstieg und Kurzanleitung: [README im Hauptverzeichnis](../README.md).
+Jeder Rechner führt ein unabhängiges Archiv.
 Es gibt keine automatische Löschung oder Synchronisation zwischen Rechnern.
 
 ## Voraussetzungen und Start
@@ -62,9 +63,9 @@ Volumes wiederzuverwenden. Volumes sind keine Backups.
 
 Die Website hat zwei Tabs:
 
-- **Geräte-API:** vorhandene ESP32-Konfiguration und Statusabfrage.
+- **Geräte-API:** ESP32-Konfiguration (Sendeintervall) und Statusabfrage.
 - **Messdaten:** Temperatur- und Luftfeuchtigkeitsdiagramm mit gemeinsamen Filtern
-  und dem Link **In Grafana öffnen**. Der Link öffnet das vorhandene Grafana-Dashboard
+  und dem Link **In Grafana öffnen**, darüber die Sensorübersicht (`GET /api/devices`). Der Link öffnet das vorhandene Grafana-Dashboard
   in einem neuen Tab; dort gelten Grafanas eigene Filter und Anmeldung.
 
 Im Messdaten-Tab Zeitraum, Gruppen und bei Bedarf einzelne Sensoren auswählen.
@@ -127,19 +128,20 @@ aufrufen.
 ## Daten und Grenzen
 
 `messages` archiviert Originalbytes, Topic, Empfangszeit, QoS, Retained-Flag und
-Parserfehler. `readings` enthält numerische Werte für Grafana.
-Unterstützt: `value` + `unit` sowie die vorhandenen Felder `temperature` und
+Parserfehler. `readings` enthält numerische Werte für Grafana. `devices` (Schema v2)
+enthält je Gruppe Status aus `iiot/group/+/status`, letzte Verbindung und letzten Wert.
+Unterstützt: `value` + `unit` sowie die Felder `temperature` und
 `humidity`. Andere Formate bleiben vollständig im Roharchiv erhalten, benötigen
 für Diagramme aber einen zusätzlichen Parser. Vor Einsatz alle Gruppenformate
 mit repräsentativen Beispielnachrichten prüfen.
 
-ISO8601-Zeitstempel mit Zeitzone werden als Messzeit verwendet. Numerische
-Zeitstempel wie ESP32-`millis()` bleiben in den Rohdaten; das Diagramm verwendet
-die Empfangszeit (`time_source=received`). Metadaten werden nicht als tatsächlicher
-Online-/Offline-Status interpretiert. Die bestehende ESP32-Firmware sendet dort
-Metadaten und keinen verlässlichen Last Will.
+ISO8601-Zeitstempel werden als Messzeit verwendet (ohne Zone = UTC). Numerische
+Zeitstempel wie `millis()` oder Abweichungen über 300 s bleiben in den Rohdaten; das
+Diagramm verwendet dann die Empfangszeit (`time_source=received`). Status wird als
+JSON-Objekt, JSON-String oder Klartext akzeptiert; Unbekanntes wird als `unknown` gespeichert.
 
-MQTT 3.1.1 wird für Kompatibilität mit der vorhandenen Firmware verwendet.
+MQTT 3.1.1 genügt, da keine MQTT-5-Funktionen benötigt werden; Topics und Payloads
+sind versionsunabhängig und der Broker akzeptiert beide Versionen.
 Abonnement mit QoS 1 erhöht nicht den QoS einer mit QoS 0 gesendeten Nachricht.
 QoS-1-Nachrichten werden nach dem Datenbank-Commit bestätigt. MQTT kann Duplikate
 liefern; diese werden bewusst archiviert. Ohne eindeutige Ereignis-ID würde
@@ -147,8 +149,7 @@ Deduplizierung möglicherweise echte Messungen löschen.
 Zufällige Client-IDs verhindern gegenseitiges Trennen eurer vier Collector.
 Es gibt keine dauerhafte Offline-Session: Während der Collector aus ist,
 werden keine historischen Nachrichten nachgeladen. Retained-Nachrichten können
-beim Start erneut eintreffen. Die unveränderte Firmware und der Kurs-Broker
-ermöglichen keine Zusage einer lückenlosen Erfassung.
+beim Start erneut eintreffen. Der Kurs-Broker ermöglicht keine Zusage einer lückenlosen Erfassung.
 
 SQLite nutzt lokale Docker-Volumes, kurze Transaktionen, `synchronous=FULL` und
 WAL-Journaling für parallele Lesezugriffe. Der Collector initialisiert die WAL- und

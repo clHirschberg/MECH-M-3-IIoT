@@ -42,7 +42,7 @@ Dateien: `docs/iot-specs/openapi.yaml`, neu `tests/` (Root), ggf. `pyproject.tom
 - [x] Schemathesis: `schemathesis run docs/iot-specs/openapi.yaml --url $DEVICE_URL` (+ Checks `all`); als pytest-Integration oder Skript `tests/run_schemathesis.sh`
 - [x] Tests ohne Gerät überspringen (`pytest.skip` wenn `DEVICE_URL` fehlt) – damit CI/Kollegen nicht rot sehen
 - [x] Optional: REST-Client-Datei `tests/device.http` zusätzlich (schnelle manuelle Tests)
-- [ ] Ausführung in README/Doku beschreiben
+- [x] Ausführung in README/Doku beschreiben
 
 Akzeptanz: `DEVICE_URL=http://<esp-ip> pdm run pytest tests -v` grün gegen echtes Gerät; Schemathesis ohne Fehler.
 Hinweis: POST mit Fuzzing ändert die Gerätekonfiguration → danach Intervall zurücksetzen (Fixture).
@@ -85,23 +85,23 @@ Akzeptanz: Dashboard zeigt alle Gruppen inkl. inaktiver; `python3 infrastructure
 
 ## AP6 – Abgabe-Dokumentation `docs/Dokumentation.qmd` (ISSUES #8) · Prio sehr hoch
 
-- [ ] Zusammenfassung + Architekturdiagramm (Mermaid in Quarto: ESP32 → Broker → Collector → SQLite → Grafana/API → Website)
-- [ ] Anleitung User: Hardware (Verkabelung GPIO 4), `.env` der Firmware, Flashen (`pio run -t upload`), Serial-Monitor, IP ablesen, Konfiguration über Website/curl
-- [ ] Anleitung User: Stack starten (`.env`, `docker compose up -d --build`, URLs, Login), Backup, Fehlerbehebung (inkl. `grafana cli admin reset-admin-password`)
-- [ ] Empfehlungen IT-Abteilung: Whitelist ausgehend (1883/TCP zu 158.180.44.197, 123/UDP NTP, 53 DNS, DHCP), eingehend 80/TCP nur LAN, 2,4-GHz-WLAN, keine Client-Isolation; Fernzugriff (VPN/WireGuard, Reverse-Tunnel, Port-Forwarding-Risiken, keine Auth/TLS, MQTT-basierte Konfiguration als Alternative)
-- [ ] Anleitung Developer: Struktur (`infrastructure/` statt `src/cloud`), Tests (Unit, Integration, HTTP-API/Schemathesis, vitest), pdm/Quarto, Spec-Abweichungen (MQTT 3.1.1) begründet
-- [ ] `infrastructure/README.md` verlinken statt duplizieren
-- [ ] `pdm run quarto render` läuft durch
+- [x] Zusammenfassung + Architekturdiagramm (Mermaid in Quarto: ESP32 → Broker → Collector → SQLite → Grafana/API → Website)
+- [x] Anleitung User: Hardware (Verkabelung GPIO 4), `.env` der Firmware, Flashen (`pio run -t upload`), Serial-Monitor, IP ablesen, Konfiguration über Website/curl
+- [x] Anleitung User: Stack starten (`.env`, `docker compose up -d --build`, URLs, Login), Backup, Fehlerbehebung (inkl. `grafana cli admin reset-admin-password`)
+- [x] Empfehlungen IT-Abteilung: Whitelist ausgehend (1883/TCP zu 158.180.44.197, 123/UDP NTP, 53 DNS, DHCP), eingehend 80/TCP nur LAN, 2,4-GHz-WLAN, keine Client-Isolation; Fernzugriff (VPN/WireGuard, Reverse-Tunnel, Port-Forwarding-Risiken, keine Auth/TLS, MQTT-basierte Konfiguration als Alternative)
+- [x] Anleitung Developer: Struktur (`infrastructure/` statt `src/cloud`), Tests (Unit, Integration, HTTP-API/Schemathesis, vitest), pdm/Quarto, Spec-Abweichungen (MQTT 3.1.1) begründet
+- [x] `infrastructure/README.md` verlinken statt duplizieren
+- [x] `pdm run quarto render` läuft durch
 
 ## AP7 – Aufräumen (ISSUES #9 + Firmware) · Prio niedrig
 
 - [ ] `src/esp32_firmware/config.h` löschen (ungenutzt), Template-Kommentare entfernen
 - [ ] Optional: `Sensor.cpp` statt Implementierung in `main.cpp`
 - [ ] Remote-Branch `origin/esp32_code` prüfen und löschen/mergen (F7)
-- [ ] `infrastructure/README.md`: MQTT-3.1.1-Begründung korrigieren
+- [x] `infrastructure/README.md`: MQTT-3.1.1-Begründung korrigieren
 - [x] `sensor_id`-Fallback statt ganzem Topic `'-'`
-- [ ] Root-README: Abschnitt „Projektüberblick unserer Gruppe“ oben, Links auf Doku
-- [ ] Ungenutzte Pico-Vorlage: in Doku als „nicht verwendet“ kennzeichnen (nicht löschen, gehört zur Aufgabenstellung)
+- [x] Root-README: Abschnitt „Projektüberblick unserer Gruppe“ oben, Links auf Doku
+- [x] Ungenutzte Pico-Vorlage: in Doku als „nicht verwendet“ kennzeichnen (nicht löschen, gehört zur Aufgabenstellung)
 
 ## AP8 – Finale Prüfung & Abgabe · Prio sehr hoch · am 27.11.
 
@@ -138,3 +138,28 @@ Akzeptanz: Dashboard zeigt alle Gruppen inkl. inaktiver; `python3 infrastructure
 - Grafana: Panels „Anzahl Sensoren“ (stat) und „Geräteübersicht“ (table) oben, Kennzahlen gerundet, Gruppenvariable aus `devices`. API `GET /api/devices` + Website-Komponente „Sensorübersicht“ im Messdaten-Tab. Integrationstest (Docker) grün, Website-Tests (vitest) grün.
 - Nicht umgesetzt: AP5 (Healthcheck/Restart-Policy, Risiko beim Start), AP7-Rest (config.h, Modulaufteilung), AP6/README (bewusst zum Schluss).
 - Laufender Stack muss neu gebaut werden: `docker compose up -d --build` (Collector migriert die DB beim Start).
+
+### Dokumentation 26.11.2026 (AP6 + README, noch nicht committet)
+
+- Root-`README.md` komplett neu nach Pflichtabschnitten der Abgabeseite (Gruppe, Video, Stand, Überblick mit Mermaid, Mikrocontroller, Container, Dashboard, HTTP-API, IT, Sicherheit). Compose-Pfad `compose.yaml` genannt (nicht umbenannt).
+- `docs/Dokumentation.qmd` gefüllt (Zusammenfassung, Architektur/Topics, User-Anleitung inkl. Fehlerbehebung, IT-Whitelist + Fernzugriffsdiskussion, Developer: Struktur, Firmware erweitern, Datenmodell, Tests, Abweichungen MQTT 3.1.1/.env statt settings.toml, KI-Einsatz). `quarto render` (ganze Site) ohne Warnungen.
+- `infrastructure/README.md`: veraltete Aussagen („Firmware unverändert“, Status-Metadaten, MQTT-3.1.1-Begründung) korrigiert, `devices` ergänzt.
+- **Offen (vom Team auszufüllen):** im README Vornamen Brose und vollständiger Name „Kal…“ (`<!-- TODO -->`), Video-Link (`TODO Link einfügen`). Beanspruchte Stufen (T2 sehr gut, T3 sehr gut + Bonus) nach Gerätetest bestätigen; README-Beispielausgaben (Serial, `device_id` `iot-gruppe-5`) beim Test gegenprüfen.
+- Danach AP8 (frischer Clone, Tests gegen Gerät, Commit/PR nach `main`, Abgabe).
+
+### Hardware-Test 26.11.2026 abends (ganze Strecke)
+
+- Firmware geflasht (`upload_speed = 115200` in `platformio.ini` ergänzt, Default brach mit „Failed to start stub flasher“ ab). Serial: WLAN, IP 192.168.68.62, NTP, MQTT ok.
+- Broker: Payloads spec-konform, `POST /config` 10 s sichtbar im Takt, Reset gehalten → `{"status":"offline"}` nach ~22 s retained, danach wieder `ok`.
+- `DEVICE_URL=http://192.168.68.62 pytest`: 35/35 grün. Schemathesis-Fälle `QUERY` und `multipart/form-data` ohne Boundary scheitern an Arduino-`WebServer` (Verbindung ohne Antwort) → im pytest als Robustheitsprüfung behandelt (`tests/test_openapi_schemathesis.py`), in README/Doku als Grenze dokumentiert; CLI meldet sie weiterhin.
+- Stack mit `docker compose up -d --build` neu gebaut (Backup vorher: `/backups/pre-v2-2026-11-26.sqlite` im Volume). DB jetzt `user_version` 2, `devices` gefüllt (10 Gruppen), keine Mixed-Case-Gruppen, `time_source='device'`, `/api/devices` ok, Grafana-Dashboard mit neuen Panels.
+- Namen im README eingetragen (Oskar Klöpfer, Carl Hirschberg, Can Kal, Daniel Brose). Offen: Video-Link, Commit/PR nach `main`, AP8.
+- Testumgebung lokal: `pdm` nicht installiert; Tests liefen mit venv (Python 3.10) und `env -u PYTHONPATH` (ROS-humble-PYTHONPATH bricht pytest-Plugins).
+
+### Website: Doku-Tab + Darkmode (26.11.2026 spät, noch nicht committet)
+
+- Neuer Tab **Dokumentation** (`/doku`, `Website/src/app/docs/documentation.ts`): rendert `docs/Dokumentation.qmd` mit `marked`, Inhaltsverzeichnis (ab lg), Mermaid lazy geladen (Diagramm auf der Website hochkant TD statt LR), externe Links in neuem Tab.
+- `Website/scripts/sync-docs.mjs` kopiert die qmd vor `npm start/build/test` nach `Website/public/docs/dokumentation.md` (Quarto-```{mermaid} → ```mermaid, relative Links → GitHub). Kopie ist eingecheckt, weil der Docker-Build nur `Website/` sieht → nach Doku-Änderungen `npm run sync-docs` und committen.
+- Darkmode: `ThemeService` (Hell/Dunkel/System, localStorage `iiot-theme`, Klasse `.dark` auf `<html>`), Startskript in `index.html` gegen Aufblitzen, `dark:`-Klassen in allen Templates, Chart.js-Achsen/Raster und Serienfarben theme-abhängig, `@tailwindcss/typography` für die Doku. Quarto-Seite: `theme: light cosmo / dark darkly`.
+- Neue Deps: `marked`, `mermaid`, `@tailwindcss/typography`; `allowedCommonJsDependencies` in `angular.json` für Mermaid.
+- Website-Tests 14/14 grün, `npm run build` ok, Container neu gebaut und hell/dunkel/mobil per Headless-Chromium geprüft; `quarto render` ok.
