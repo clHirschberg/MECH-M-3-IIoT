@@ -34,7 +34,15 @@
             },
             "ssr": {
               "entry": "src/server.ts"
-            }
+            },
+            "allowedCommonJsDependencies": [
+              "@braintree/sanitize-url",
+              "dayjs",
+              "cytoscape-cose-bilkent",
+              "cytoscape-fcose",
+              "vscode-jsonrpc",
+              "vscode-languageserver-types"
+            ]
           },
           "configurations": {
             "production": {

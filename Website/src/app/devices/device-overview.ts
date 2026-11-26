@@ -21,10 +21,10 @@ export interface DevicesResponse {
 }
 
 const STATUS_CLASSES: Record<DeviceInfo['status'], string> = {
-  ok: 'bg-green-100 text-green-800',
-  error: 'bg-red-100 text-red-800',
-  offline: 'bg-red-100 text-red-800',
-  unknown: 'bg-amber-100 text-amber-800',
+  ok: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
+  error: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
+  offline: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
+  unknown: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300',
 };
 
 /** Übersicht aller Sensoren (Gruppen) mit Status aus iiot/group/+/status und letzter Verbindung. */

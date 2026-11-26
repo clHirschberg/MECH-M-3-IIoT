@@ -7,7 +7,11 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "serve:ssr:Website": "node dist/Website/server/server.mjs"
+    "serve:ssr:Website": "node dist/Website/server/server.mjs",
+    "sync-docs": "node scripts/sync-docs.mjs",
+    "prestart": "node scripts/sync-docs.mjs",
+    "prebuild": "node scripts/sync-docs.mjs",
+    "pretest": "node scripts/sync-docs.mjs"
   },
   "private": true,
   "packageManager": "npm@10.9.7",
@@ -20,8 +24,11 @@
     "@angular/platform-server": "^21.2.0",
     "@angular/router": "^21.2.0",
     "@angular/ssr": "^21.2.27",
+    "@tailwindcss/typography": "^0.5.19",
     "chart.js": "4.6.1",
     "express": "^5.1.0",
+    "marked": "^18.0.3",
+    "mermaid": "^11.12.2",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },
