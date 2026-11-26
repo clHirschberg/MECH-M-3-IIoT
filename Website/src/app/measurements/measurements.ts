@@ -5,6 +5,7 @@ import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http'
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ChartTimeRange, MeasurementChart, seriesColor } from './measurement-chart';
 import { MeasurementResponse, SensorOption } from './models';
+import { seriesStatistics } from './statistics';
 import { DeviceOverview } from '../devices/device-overview';
 import { ThemeService } from '../theme.service';
 
@@ -57,6 +58,10 @@ export class Measurements {
   readonly temperature = computed(() => this.response()?.series.filter(s => s.metric === 'temperature') ?? []);
   readonly humidity = computed(() => this.response()?.series.filter(s => s.metric === 'humidity') ?? []);
   readonly sampleCount = computed(() => this.response()?.series.reduce((n, s) => n + s.points.reduce((a, p) => a + p.count, 0), 0) ?? 0);
+  readonly statistics = computed(() => {
+    const data = this.response();
+    return data ? seriesStatistics(data.series, data.interval_seconds, this.viewRange()) : [];
+  });
   readonly usesReceivedTime = computed(() => this.response()?.series.some(s => s.points.some(p => p.received_count > 0)) ?? false);
   appliedDescription = '';
   private applied: { preset: string; from: string; to: string; groups: string[]; sensors: string[]; resolution: number } | null = null;

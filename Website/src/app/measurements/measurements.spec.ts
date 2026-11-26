@@ -89,6 +89,21 @@ describe('Measurement filters', () => {
     http.expectOne(r => r.url === '/api/readings').flush(empty);
   });
 
+  it('renders period statistics per sensor and metric', () => {
+    const c = fixture.componentInstance;
+    c.apply();
+    http.expectOne(r => r.url === '/api/readings').flush({ from: 0, to: 20_000, interval_seconds: 10, series: [
+      { group: 'a', sensor: 'sensor-1', metric: 'humidity', unit: '%', points: [
+        { time: 0, mean: 40, min: 39, max: 41, count: 1, received_count: 0 },
+        { time: 10_000, mean: 46, min: 44, max: 48.5, count: 3, received_count: 0 },
+      ] },
+    ] });
+    fixture.detectChanges();
+    const cells = [...(fixture.nativeElement as HTMLElement).querySelectorAll('[aria-labelledby="statistics-heading"] tbody td')]
+      .map(td => td.textContent?.trim());
+    expect(cells).toEqual(['a / sensor-1', 'Luftfeuchtigkeit', '4', '39.00 %', '48.50 %', '44.50 %']);
+  });
+
   it('renders the Grafana link and refresh intervals only in this dashboard', () => {
     const host = fixture.nativeElement as HTMLElement;
     const link = host.querySelector<HTMLAnchorElement>('a[target="_blank"]');
