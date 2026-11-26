@@ -14,3 +14,13 @@ license = {text = "MIT"}
 
 [tool.pdm]
 distribution = false
+
+[dependency-groups]
+test = [
+    "pytest>=8",
+    "requests>=2.31",
+    "schemathesis>=4.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

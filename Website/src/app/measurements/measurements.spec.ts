@@ -20,6 +20,7 @@ describe('Measurement filters', () => {
       { group_name: 'a', sensor_id: 'sensor-1', metric: 'temperature' },
       { group_name: 'b', sensor_id: 'sensor-2', metric: 'humidity' },
     ] });
+    http.expectOne('/api/devices').flush({ total: 0, active: 0, active_seconds: 300, devices: [] });
     http.expectOne('/api/config').flush({ grafana_url: 'http://localhost:3000/d/iiot-overview' });
     http.expectOne(r => r.url === '/api/readings').flush(empty);
     fixture.componentInstance.refreshSeconds = 0;

@@ -5,10 +5,11 @@ import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http'
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ChartTimeRange, MeasurementChart, seriesColor } from './measurement-chart';
 import { MeasurementResponse, SensorOption } from './models';
+import { DeviceOverview } from '../devices/device-overview';
 
 @Component({
   selector: 'app-measurements', standalone: true,
-  imports: [FormsModule, MeasurementChart, DatePipe, DecimalPipe],
+  imports: [FormsModule, MeasurementChart, DeviceOverview, DatePipe, DecimalPipe],
   templateUrl: './measurements.html',
 })
 export class Measurements {

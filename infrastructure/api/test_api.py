@@ -76,5 +76,45 @@ class ApiTests(unittest.TestCase):
         self.assertFalse(Path(api.DB_PATH).exists())
 
 
+class DevicesTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.original = api.DB_PATH
+        api.DB_PATH = str(Path(self.temp.name) / 'data.sqlite')
+        self.db = sqlite3.connect(api.DB_PATH)
+        self.db.execute('CREATE TABLE readings(id INTEGER PRIMARY KEY)')
+        self.client = TestClient(api.app)
+
+    def tearDown(self):
+        self.client.close()
+        self.db.close()
+        api.DB_PATH = self.original
+        self.temp.cleanup()
+
+    def test_old_schema_without_devices_table(self):
+        response = self.client.get('/api/devices')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['total'], 0)
+
+    def test_devices_with_activity(self):
+        import time
+        now = time.time()
+        self.db.execute('CREATE TABLE devices(group_name TEXT PRIMARY KEY, status TEXT, status_updated_at REAL, last_seen REAL, last_value REAL, unit TEXT)')
+        self.db.executemany('INSERT INTO devices VALUES(?,?,?,?,?,?)', [
+            ('a', 'ok', now - 10, now - 5, 21.5, '°C'),
+            ('b', 'offline', now - 1000, now - 1000, 19.0, '°C'),
+            ('c', 'error', now, None, None, None),
+        ])
+        self.db.commit()
+        data = self.client.get('/api/devices').json()
+        self.assertEqual((data['total'], data['active']), (3, 1))
+        a, b, c = data['devices']
+        self.assertEqual((a['group'], a['status'], a['active'], a['last_value']), ('a', 'ok', True, 21.5))
+        self.assertAlmostEqual(a['last_seen'], (now - 5) * 1000, delta=1)
+        self.assertFalse(b['active'])
+        self.assertIsNone(c['last_seen'])
+        self.assertFalse(c['active'])
+
+
 if __name__ == '__main__':
     unittest.main()

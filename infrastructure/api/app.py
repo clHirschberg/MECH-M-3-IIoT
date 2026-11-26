@@ -56,6 +56,32 @@ def metadata():
     return {'sensors': [dict(row) for row in rows]}
 
 
+ACTIVE_SECONDS = 300
+
+
+@app.get('/api/devices')
+def devices():
+    """Geräteübersicht: Status aus iiot/group/+/status und letzter Messwert je Gruppe."""
+    with database() as db:
+        try:
+            rows = db.execute('''SELECT group_name, status, status_updated_at, last_seen, last_value, unit
+                FROM devices ORDER BY group_name''').fetchall()
+        except sqlite3.OperationalError:
+            rows = []  # Datenbank noch im alten Schema, Collector migriert beim nächsten Start
+    now = time.time()
+    items = [{
+        'group': row['group_name'],
+        'status': row['status'],
+        'status_updated_at': row['status_updated_at'] * 1000 if row['status_updated_at'] is not None else None,
+        'last_seen': row['last_seen'] * 1000 if row['last_seen'] is not None else None,
+        'last_value': row['last_value'],
+        'unit': row['unit'],
+        'active': row['last_seen'] is not None and now - row['last_seen'] <= ACTIVE_SECONDS,
+    } for row in rows]
+    return {'total': len(items), 'active': sum(item['active'] for item in items),
+            'active_seconds': ACTIVE_SECONDS, 'devices': items}
+
+
 @app.get('/api/readings')
 def readings(
     start: Annotated[datetime, Query(alias='from')],

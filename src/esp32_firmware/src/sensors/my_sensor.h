@@ -33,7 +33,13 @@ public:
         if (publishReading("temperature", temperature, "°C")) {
             recordLastValue(temperature);
         }
-        publishReading("humidity", humidity, "%");
+        if (publishReading("humidity", humidity, "%")) {
+            recordLastHumidity(humidity);
+        }
+
+        // Ungültige Messung (NaN, z.B. Sensor abgesteckt) -> Status "error",
+        // nach Erholung wieder "ok". Gesendet wird nur bei einem Wechsel.
+        setStatus(isnan(temperature) || isnan(humidity) ? "error" : "ok");
     }
 };
 

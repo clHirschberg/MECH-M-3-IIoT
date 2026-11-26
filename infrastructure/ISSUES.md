@@ -45,9 +45,9 @@ retained Topic) wird ignoriert. Beim Speichern eines Messwerts per Upsert
 (`user_version` 1) muss dabei migriert werden.
 
 **Akzeptanz:**
-- [ ] Unit-Tests für `ok`, ` OFFLINE\n`, `"error"`, JSON mit `status`, Metadaten-JSON ohne `status` (→ `unknown`), `\xff`, leeren Payload
-- [ ] Status vor dem ersten Messwert legt eine Zeile mit `last_seen = NULL` an
-- [ ] Ein Messwert überschreibt den Status nicht und umgekehrt
+- [x] Unit-Tests für `ok`, ` OFFLINE\n`, `"error"`, JSON mit `status`, Metadaten-JSON ohne `status` (→ `unknown`), `\xff`, leeren Payload
+- [x] Status vor dem ersten Messwert legt eine Zeile mit `last_seen = NULL` an
+- [x] Ein Messwert überschreibt den Status nicht und umgekehrt
 
 ## #2 Dashboard: Sensorübersicht und Anzahl Sensoren (bewertungsrelevant: *sehr gut*)
 
@@ -63,8 +63,8 @@ inaktiv angezeigt zu werden.
 - `active_sensors` ist bei leerer DB `0`, nicht `NULL` (`COALESCE`/`SUM(CASE …)`).
 
 **Akzeptanz:**
-- [ ] Beide Panels laufen auf einer leeren DB ohne Fehler („No data“)
-- [ ] Integrationstest prüft die neuen Panel-Queries mit
+- [x] Beide Panels laufen auf einer leeren DB ohne Fehler („No data“)
+- [x] Integrationstest prüft die neuen Panel-Queries mit
 
 ## #3 Gruppenname in Kleinbuchstaben
 
@@ -74,8 +74,8 @@ inaktiv angezeigt zu werden.
 `conventions.md` verlangt Kleinbuchstaben.
 
 **Akzeptanz:**
-- [ ] `group_name` wird `.lower()` gespeichert (in `readings` und `devices`)
-- [ ] Leere Gruppe (`iiot/group//...`) wird nicht als Messwert gespeichert
+- [x] `group_name` wird `.lower()` gespeichert (in `readings` und `devices`)
+- [x] Leere Gruppe (`iiot/group//...`) wird nicht als Messwert gespeichert
 
 ## #4 Zeitstempel-Regel: fehlende Zone und falsch gestellte Uhr
 
@@ -88,7 +88,7 @@ inaktiv angezeigt zu werden.
 (`time_source = 'received'`). Der Original-Zeitstempel bleibt im Roharchiv.
 
 **Akzeptanz:**
-- [ ] Tests: ohne Zone, mit Offset `+01:00`, 301 s Abweichung, 1970, `millis()`-Zahl, unlesbarer String, Feld fehlt
+- [x] Tests: ohne Zone, mit Offset `+01:00`, 301 s Abweichung, 1970, `millis()`-Zahl, unlesbarer String, Feld fehlt
 
 ## #5 Toleranz bei `value` und `unit`
 
@@ -103,7 +103,7 @@ Unit als °C. Numerische Strings über `float()` akzeptieren, `bool`, `NaN`
 und `inf` weiter ablehnen. Kennzahlen mit `ROUND(…, 2)`.
 
 **Akzeptanz:**
-- [ ] Tests für `"21.5"`, fehlende Unit, `K` → °C
+- [x] Tests für `"21.5"`, fehlende Unit, `K` → °C
 
 ## #6 Healthcheck meldet MQTT-Probleme nicht
 

@@ -126,6 +126,12 @@ static void sendJsonError(int code, const char* message) {
     server.send(code, "application/json", output);
 }
 
+// 405 mit Allow-Header (RFC 9110), damit Clients die erlaubten Methoden kennen
+static void sendMethodNotAllowed(const char* allow) {
+    server.sendHeader("Allow", allow);
+    sendJsonError(405, "method not allowed");
+}
+
 void Sensor::setupRestApi() {
     const char* headers[] = {"Origin"};
     server.collectHeaders(headers, 1);
@@ -134,10 +140,10 @@ void Sensor::setupRestApi() {
     server.on("/config", HTTP_OPTIONS, handleCorsPreflight);
     server.on("/config", HTTP_GET, [this]() { handleGetSettings(); });
     server.on("/config", HTTP_POST, [this]() { handlePostSettings(); });
-    server.on("/config", HTTP_ANY, []() { sendJsonError(405, "method not allowed"); });
+    server.on("/config", HTTP_ANY, []() { sendMethodNotAllowed("GET, POST, OPTIONS"); });
     server.on("/status", HTTP_OPTIONS, handleCorsPreflight);
     server.on("/status", HTTP_GET, [this]() { handleGetStatus(); });
-    server.on("/status", HTTP_ANY, []() { sendJsonError(405, "method not allowed"); });
+    server.on("/status", HTTP_ANY, []() { sendMethodNotAllowed("GET, OPTIONS"); });
     server.onNotFound([]() { sendJsonError(404, "not found"); });
 
     server.begin();
@@ -169,59 +175,59 @@ void Sensor::handlePostSettings() {
         return;
     }
 
-    // Erst alles validieren, dann übernehmen -> keine halb angewendete Konfiguration
+    // openapi.yaml 1.2.0 (ConfigUpdate): nur das Sendeintervall ist änderbar,
+    // device_id darf nicht per POST geändert werden. Unbekannte Felder werden ignoriert.
+    if (!doc.is<JsonObject>()) {
+        sendJsonError(400, "JSON object expected");
+        return;
+    }
+    if (!doc["device_id"].isNull()) {
+        sendJsonError(400, "device_id cannot be changed via POST");
+        return;
+    }
     JsonVariant interval = doc["reading_interval_seconds"];
-    JsonVariant newDeviceId = doc["device_id"];
-    if (interval.isNull() && newDeviceId.isNull()) {
-        sendJsonError(400, "no known config field");
+    if (interval.isNull()) {
+        sendJsonError(400, "reading_interval_seconds is required");
         return;
     }
-    if (!interval.isNull() &&
-        (!interval.is<long>() || interval.as<long>() < 1 || interval.as<long>() > 86400)) {
-        sendJsonError(400, "reading_interval_seconds must be an integer between 1 and 86400");
-        return;
-    }
-    if (!newDeviceId.isNull() && (!newDeviceId.is<const char*>() || strlen(newDeviceId.as<const char*>()) == 0)) {
-        sendJsonError(400, "device_id must be a non-empty string");
+    // Untergrenze 2 s (DHT11 misst höchstens alle 2 s), Obergrenze 1 Tag
+    if (!interval.is<long>() || interval.as<long>() < 2 || interval.as<long>() > 86400) {
+        sendJsonError(400, "reading_interval_seconds must be an integer between 2 and 86400");
         return;
     }
 
+    sendInterval = interval.as<unsigned long>() * 1000;
     preferences.begin("sensor_config", false);
-    if (!interval.isNull()) {
-        sendInterval = interval.as<unsigned long>() * 1000;
-        preferences.putULong("sendInterval", sendInterval);
-    }
-    if (!newDeviceId.isNull()) {
-        deviceId = newDeviceId.as<String>();
-        preferences.putString("sensorName", deviceId);
-    }
+    preferences.putULong("sendInterval", sendInterval);
     preferences.end();
-
-    // Neue sensor_id auch im Last Will: sauber trennen, loop() verbindet neu
-    // und sendet "ok" mit der neuen ID.
-    if (!newDeviceId.isNull()) {
-        mqttClient.disconnect();
-    }
 
     handleGetSettings(); // 200 mit der jetzt gültigen Konfiguration
 }
 
-// Vorläufiges Schema - die Felder von /status werden noch in der Gesamtgruppe festgelegt
+// Schema DeviceStatus aus openapi.yaml 1.2.0, ergänzt um status, wifi_rssi und ip
 void Sensor::handleGetStatus() {
     JsonDocument doc;
     doc["device_id"] = deviceId;
     doc["uptime_seconds"] = millis() / 1000;
     doc["wifi_connected"] = WiFi.status() == WL_CONNECTED;
-    doc["wifi_rssi"] = WiFi.RSSI();
-    doc["ip"] = WiFi.localIP().toString();
     doc["mqtt_connected"] = mqttClient.connected();
     if (isnan(lastValue)) {
-        doc["last_value"] = nullptr;
-        doc["last_publish_seconds_ago"] = nullptr;
+        doc["last_telemetry"] = nullptr;
     } else {
-        doc["last_value"] = lastValue;
-        doc["last_publish_seconds_ago"] = (millis() - lastPublishMs) / 1000;
+        JsonObject telemetry = doc["last_telemetry"].to<JsonObject>();
+        telemetry["timestamp"] = lastTimestamp;
+        telemetry["value"] = lastValue;
+        telemetry["unit"] = "°C";
     }
+    if (isnan(lastHumidity)) {
+        doc["last_humidity_percent"] = nullptr;
+    } else {
+        doc["last_humidity_percent"] = lastHumidity;
+    }
+    // Zusatzfelder (laut Spec erlaubt)
+    doc["status"] = currentStatus;
+    doc["wifi_rssi"] = WiFi.RSSI();
+    doc["ip"] = WiFi.localIP().toString();
     String output;
     serializeJson(doc, output);
     sendCorsHeaders();

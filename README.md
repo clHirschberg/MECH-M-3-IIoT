@@ -11,7 +11,9 @@ Unterlagen, Aufgabenstellung und Vorlagen für die synchronen Termine 1–3 der 
 - `src/raspi_firmware/`: Vorlage für den Raspberry Pi Pico W (CircuitPython)
 - `src/esp32_firmware/`: Vorlage für den ESP32 (PlatformIO/Arduino)
 - `Website/`: Angular-Anwendung
-- `docs/Dokumentation.qmd`: Platz für Ihre eigene Dokumentation
+- `docs/Dokumentation.qmd`: optionaler Platz für Details Ihrer Dokumentation
+
+Ersetzen Sie dieses README in Ihrem Fork durch Ihr eigenes, siehe [Abgabe](https://jhumci.github.io/MECH-M-3-IIoT/#abgabe).
 
 ## Gesamtes System mit Docker starten
 
