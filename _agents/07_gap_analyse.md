@@ -51,7 +51,7 @@ Legende: ✅ erfüllt · 🟡 teilweise · ❌ offen. „AP“ verweist auf `08_
 | befriedigend: echte DB | ✅ | SQLite (WAL) | – |
 | gut: neue Sensoren automatisch | ✅ | `iiot/group/#`, Variable `group` | – |
 | sehr gut: Sensorübersicht (Anzahl, letzte Verbindung, Status) | ❌ | ISSUES #1/#2 | AP3/AP4 |
-| Bonus Mittelwert/Min/Max | ✅ | Grafana-Tabelle + Website-Min/Max-Band | – |
+| Bonus Mittelwert/Min/Max | ✅ | Grafana-Tabelle + Website-Kennzahlentabelle und Min/Max-Band | – |
 | Robustheit fremder Formate | 🟡 | ISSUES #3/#4/#5 | AP3 |
 | Ressourcenschonend, Laptop | ✅ | 4 schlanke Container | – |
 

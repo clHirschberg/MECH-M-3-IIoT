@@ -173,7 +173,8 @@ Grafana (Aktualisierung alle 10 s, Gruppenfilter oben):
 - **Letzte empfangene Nachrichten / Letzte Messwerte** – Rohnachrichten inkl. Parserfehler.
 
 Website: Tab **Messdaten** mit Sensorübersicht und Diagrammen (Filter für Zeitraum, Gruppe, Sensor,
-Min-/Max-Band, Aktualisierung 5/10/30 s); Tab **Geräte-API** zum Lesen von Status/Konfiguration und
+Min-/Max-Band, Aktualisierung 5/10/30 s) und Tabelle **Kennzahlen im Zeitraum** (Anzahl, Minimum, Maximum,
+gewichteter Mittelwert pro Sensor und Messgröße; folgt dem Zoom im Diagramm); Tab **Geräte-API** zum Lesen von Status/Konfiguration und
 Ändern des Sendeintervalls (IP-Adresse des ESP32 eingeben, Rechner muss im selben Netz sein)); Tab
 **Dokumentation** mit dieser Projektdoku. Oben rechts lässt sich zwischen Hell, Dunkel und System umschalten.
 
