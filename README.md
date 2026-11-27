@@ -21,7 +21,7 @@ Ausführliche Dokumentation (Anleitungen, IT-Hinweise, Developer-Teil):
 
 ## Video
 
-Bildschirmaufnahme (3–5 min): **TODO Link einfügen**
+Bildschirmaufnahme: https://cloud.lammershagen.de/s/k742RPZJxCiyia9
 
 ## Erreichter Stand
 
